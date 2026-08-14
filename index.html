@@ -99,8 +99,18 @@
     display:flex; align-items:center; justify-content:space-between;
     padding:6px 4px 8px;
   }
+  .grupo-titulo-btn{
+    display:flex; align-items:center; gap:6px;
+    background:none; border:none; padding:2px 4px 2px 0; margin:0; cursor:pointer;
+  }
+  .grupo-titulo-btn .chevron{
+    width:15px; height:15px; color:#b7c0d4; flex-shrink:0;
+    transition:transform 0.15s ease;
+  }
+  .grupo-titulo-btn.colapsado .chevron{ transform:rotate(-90deg); }
   .grupo-titulo{ font-size:13px; font-weight:800; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.4px; }
   .grupo-titulo .cant{ color:#b7c0d4; font-weight:700; margin-left:4px; }
+  .grupo-clientes.colapsado{ display:none; }
   .btn-enviar-reparto{
     display:flex; align-items:center; gap:6px;
     background:#e9f9ef; color:#178a48; border:1px solid #c7ecd4;
@@ -549,6 +559,7 @@ async function postAppsScript(payload){
 let pedidos = [];
 let repartos = [];
 let currentTab = 'pedido';
+let gruposColapsados = new Set();
 let filtro = '';
 
 const mainEl = document.getElementById('main');
@@ -633,15 +644,20 @@ function renderPedido(lista){
     const pendientes = conCantidad.filter(c => String(c.Estado || '').toLowerCase() !== 'enviado');
     const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
     const puedeEnviar = pendientes.length > 0 && repartoInfo && repartoInfo.WhatsApp;
+    const colapsado = gruposColapsados.has(reparto);
 
     html += `<div class="grupo">
       <div class="grupo-header">
-        <div class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientes.length}</span></div>
+        <button type="button" class="grupo-titulo-btn ${colapsado ? 'colapsado' : ''}" data-reparto="${escapeHtml(reparto)}">
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientes.length}</span></span>
+        </button>
         <button class="btn-enviar-reparto ${puedeEnviar ? '' : 'deshabilitado'}" data-reparto="${escapeHtml(reparto)}" ${puedeEnviar ? '' : 'disabled'}>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.868-2.03-.967-.273-.099-.472-.148-.67.15-.198.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.99.583 3.845 1.588 5.405L2 22l4.735-1.552A9.947 9.947 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>
           Enviar
         </button>
-      </div>`;
+      </div>
+      <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
     clientes.forEach(c => {
       const cargado = tieneCantidades(c);
       const enviado = String(c.Estado || '').toLowerCase() === 'enviado';
@@ -656,7 +672,7 @@ function renderPedido(lista){
         ${badge}
       </div>`;
     });
-    html += `</div>`;
+    html += `</div></div>`;
   });
 
   mainEl.innerHTML = html;
@@ -666,6 +682,14 @@ function renderPedido(lista){
   });
   mainEl.querySelectorAll('.btn-enviar-reparto').forEach(el => {
     el.addEventListener('click', () => enviarReparto(el.dataset.reparto));
+  });
+  mainEl.querySelectorAll('.grupo-titulo-btn').forEach(el => {
+    el.addEventListener('click', () => {
+      const reparto = el.dataset.reparto;
+      if(gruposColapsados.has(reparto)) gruposColapsados.delete(reparto);
+      else gruposColapsados.add(reparto);
+      render();
+    });
   });
 }
 
