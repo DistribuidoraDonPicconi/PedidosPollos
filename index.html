@@ -212,6 +212,13 @@
   .estado-btn.selected{ background:var(--azul); color:#fff; border-color:var(--azul); }
   .estado-btn.selected.enviado{ background:var(--verde); border-color:var(--verde); }
 
+  .reparto-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .reparto-btn{
+    border:1px solid var(--azul-borde); background:#fff; cursor:pointer;
+    padding:12px 8px; border-radius:12px; font-size:14px; font-weight:700; color:var(--texto-tenue);
+  }
+  .reparto-btn.selected{ background:var(--azul); color:#fff; border-color:var(--azul); }
+
   /* Confirmación */
   #confirm-modal{
     position:fixed; inset:0; z-index:250;
@@ -291,8 +298,8 @@
       <label>Nombre</label>
       <input type="text" id="nc-nombre" placeholder="Ej: Avercon Blanco" autocomplete="off">
       <label>Reparto</label>
-      <input type="text" id="nc-reparto" placeholder="Ej: 1" list="lista-repartos" autocomplete="off">
-      <datalist id="lista-repartos"></datalist>
+      <div class="reparto-grid" id="nc-reparto-grid"></div>
+      <input type="hidden" id="nc-reparto">
       <label>Localidad</label>
       <input type="text" id="nc-localidad" placeholder="Ej: El Pingo" autocomplete="off">
       <label>Contacto (WhatsApp)</label>
@@ -316,7 +323,8 @@
     <div class="modal-body">
       <input type="hidden" id="ch-reparto-original">
       <label>Reparto</label>
-      <input type="text" id="ch-reparto" placeholder="Ej: 1" list="lista-repartos" autocomplete="off">
+      <div class="reparto-grid" id="ch-reparto-grid"></div>
+      <input type="hidden" id="ch-reparto">
       <label>Chofer</label>
       <input type="text" id="ch-chofer" placeholder="Ej: Juan" autocomplete="off">
       <label>WhatsApp</label>
@@ -545,20 +553,12 @@ async function cargarDatos(){
     }
     pedidos = data.pedidos || [];
     repartos = data.repartos || [];
-    actualizarListaRepartos();
     render();
   }catch(err){
     mainEl.innerHTML = `<div class="state-msg error">No se pudo cargar el Google Sheet.<br>${err.message}<br><br>Revisá que CONFIG.APPS_SCRIPT_URL esté bien configurada.</div>`;
   }finally{
     btnRefresh.classList.remove('spinning');
   }
-}
-
-function actualizarListaRepartos(){
-  const dl = document.getElementById('lista-repartos');
-  const set = new Set(repartos.map(r => String(r.Reparto || '').trim()).filter(Boolean));
-  pedidos.forEach(p => { if(p.Reparto) set.add(String(p.Reparto).trim()); });
-  dl.innerHTML = Array.from(set).map(r => `<option value="${escapeHtml(r)}"></option>`).join('');
 }
 
 function escapeHtml(s){
@@ -672,7 +672,7 @@ function renderChoferes(){
   repartos.forEach(r => {
     html += `<div class="cliente-card" data-reparto="${escapeHtml(r.Reparto)}">
       <div class="cliente-info">
-        <div class="cliente-nombre">Reparto ${escapeHtml(r.Reparto)}</div>
+        <div class="cliente-nombre">${escapeHtml(r.Reparto)}</div>
         <div class="cliente-sub">${escapeHtml(r.Chofer || 'Sin nombre')} · ${escapeHtml(r.WhatsApp || 'Sin WhatsApp')}</div>
       </div>
       <span class="cliente-badge vacio">Editar</span>
@@ -710,6 +710,20 @@ const ESTADOS = [
   { valor: '', label: 'Pendiente' },
   { valor: 'Enviado', label: 'Enviado' }
 ];
+
+// Opciones fijas de Reparto, usadas como botones en los formularios de
+// Cliente y Chofer. Se guarda tal cual (ej: "Reparto 1") en la planilla.
+const REPARTOS_OPCIONES = ['Granja', 'Reparto 1', 'Reparto 2', 'Reparto 3'];
+
+function renderRepartoBotones(gridEl, hiddenInput){
+  const actual = hiddenInput.value;
+  gridEl.innerHTML = REPARTOS_OPCIONES.map(r => `
+    <button type="button" class="reparto-btn ${actual === r ? 'selected' : ''}" data-valor="${escapeHtml(r)}">${escapeHtml(r)}</button>
+  `).join('');
+  gridEl.querySelectorAll('.reparto-btn').forEach(btn => {
+    btn.addEventListener('click', () => { hiddenInput.value = btn.dataset.valor; renderRepartoBotones(gridEl, hiddenInput); });
+  });
+}
 
 function abrirCantidades(nombreCliente){
   const c = pedidos.find(p => p.Cliente === nombreCliente);
@@ -776,6 +790,7 @@ const clienteModal = document.getElementById('cliente-modal');
 const ncTitulo = document.getElementById('nc-titulo');
 const ncNombre = document.getElementById('nc-nombre');
 const ncReparto = document.getElementById('nc-reparto');
+const ncRepartoGrid = document.getElementById('nc-reparto-grid');
 const ncLocalidad = document.getElementById('nc-localidad');
 const ncContacto = document.getElementById('nc-contacto');
 const ncNombreOriginal = document.getElementById('nc-nombre-original');
@@ -791,6 +806,7 @@ function abrirNuevoCliente(){
   ncTitulo.textContent = 'Nuevo cliente';
   ncNombreOriginal.value = '';
   ncNombre.value = ''; ncReparto.value = ''; ncLocalidad.value = ''; ncContacto.value = '';
+  renderRepartoBotones(ncRepartoGrid, ncReparto);
   ncError.textContent = '';
   ncNombre.disabled = false;
   ncFooter.innerHTML = `<button class="btn-cancelar" id="nc-cancelar-btn">Cancelar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
@@ -805,6 +821,7 @@ function abrirEditarCliente(nombreCliente){
   ncNombreOriginal.value = c.Cliente;
   ncNombre.value = c.Cliente || '';
   ncReparto.value = c.Reparto || '';
+  renderRepartoBotones(ncRepartoGrid, ncReparto);
   ncLocalidad.value = c.Localidad || '';
   ncContacto.value = c.Contacto || '';
   ncError.textContent = '';
@@ -852,6 +869,7 @@ async function guardarCliente(){
 const choferModal = document.getElementById('chofer-modal');
 const chTitulo = document.getElementById('ch-titulo');
 const chReparto = document.getElementById('ch-reparto');
+const chRepartoGrid = document.getElementById('ch-reparto-grid');
 const chChofer = document.getElementById('ch-chofer');
 const chWhatsapp = document.getElementById('ch-whatsapp');
 const chRepartoOriginal = document.getElementById('ch-reparto-original');
@@ -862,6 +880,7 @@ function abrirNuevoChofer(){
   chTitulo.textContent = 'Nuevo chofer';
   chRepartoOriginal.value = '';
   chReparto.value = ''; chChofer.value = ''; chWhatsapp.value = '';
+  renderRepartoBotones(chRepartoGrid, chReparto);
   chError.textContent = '';
   chFooter.innerHTML = `<button class="btn-cancelar" id="ch-cancelar-btn">Cancelar</button><button class="btn-guardar" id="ch-guardar">Guardar</button>`;
   reengancharFooterChofer();
@@ -874,6 +893,7 @@ function abrirEditarChofer(reparto){
   chTitulo.textContent = 'Editar chofer';
   chRepartoOriginal.value = r.Reparto;
   chReparto.value = r.Reparto || '';
+  renderRepartoBotones(chRepartoGrid, chReparto);
   chChofer.value = r.Chofer || '';
   chWhatsapp.value = r.WhatsApp || '';
   chError.textContent = '';
@@ -919,7 +939,7 @@ async function guardarChofer(){
 
 function pedirConfirmacionEliminarChofer(reparto){
   confirmTitulo.textContent = 'Eliminar chofer';
-  confirmTexto.textContent = `Se elimina el chofer del Reparto "${reparto}". Los clientes de ese reparto no se tocan, pero no se va a poder enviar el pedido hasta cargar otro chofer. No se puede deshacer.`;
+  confirmTexto.textContent = `Se elimina el chofer de "${reparto}". Los clientes de ese reparto no se tocan, pero no se va a poder enviar el pedido hasta cargar otro chofer. No se puede deshacer.`;
   accionConfirmada = async () => {
     try{
       const data = await postAppsScript({ accion:'eliminarChofer', reparto });
@@ -986,7 +1006,7 @@ async function enviarReparto(reparto){
 
   const fecha = new Date();
   const fechaStr = String(fecha.getDate()).padStart(2,'0') + '/' + String(fecha.getMonth()+1).padStart(2,'0');
-  let texto = `📦 Pedido Reparto ${reparto} - ${fechaStr}\n\n`;
+  let texto = `📦 Pedido ${reparto} - ${fechaStr}\n\n`;
   clientes.forEach(c => {
     const items = CONFIG.PRODUCTOS
       .filter(p => Number(c[p.codigo]) > 0)
