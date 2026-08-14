@@ -216,6 +216,8 @@
 
   /* Grid de cantidades por producto */
   .productos-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+  .productos-grid.col-3{ grid-template-columns:1fr 1fr 1fr; }
+  .productos-grid + .productos-grid{ margin-top:10px; }
   .producto-item label{ display:block; font-size:12.5px; font-weight:700; color:var(--texto-tenue); margin:0 0 5px; }
   .producto-item input{
     width:100%; padding:11px 10px; border-radius:11px; border:1px solid var(--azul-borde);
@@ -293,7 +295,7 @@
     <div class="modal-body">
       <input type="hidden" id="cant-cliente-id">
       <label>Cantidades</label>
-      <div class="productos-grid" id="cant-grid"></div>
+      <div id="cant-grid"></div>
       <label>Estado</label>
       <div class="estado-grid" id="cant-estado-grid"></div>
       <input type="hidden" id="cant-estado-valor">
@@ -825,14 +827,19 @@ function abrirCantidades(nombreCliente){
   cantSub.textContent = [c.Reparto, c.Localidad].filter(Boolean).join(' · ');
   cantError.textContent = '';
 
-  cantGrid.innerHTML = CONFIG.PRODUCTOS.map(p => {
+  const primeraFila = CONFIG.PRODUCTOS.slice(0, 2);
+  const resto = CONFIG.PRODUCTOS.slice(2);
+  const itemHtml = p => {
     const val = c[p.codigo];
     const valStr = (val === undefined || val === null || val === '') ? '' : String(val);
     return `<div class="producto-item">
       <label>${escapeHtml(p.label)}</label>
       <input type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-codigo="${p.codigo}" value="${escapeHtml(valStr)}">
     </div>`;
-  }).join('');
+  };
+  cantGrid.innerHTML =
+    `<div class="productos-grid">${primeraFila.map(itemHtml).join('')}</div>` +
+    `<div class="productos-grid col-3">${resto.map(itemHtml).join('')}</div>`;
 
   const estadoActual = c.Estado || '';
   cantEstadoValor.value = estadoActual;
