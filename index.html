@@ -306,6 +306,30 @@
   </div>
 </div>
 
+<!-- Modal nuevo/editar chofer -->
+<div id="chofer-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="ch-titulo">Nuevo chofer</h3>
+      <button class="modal-close" id="ch-cerrar" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ch-reparto-original">
+      <label>Reparto</label>
+      <input type="text" id="ch-reparto" placeholder="Ej: 1" list="lista-repartos" autocomplete="off">
+      <label>Chofer</label>
+      <input type="text" id="ch-chofer" placeholder="Ej: Juan" autocomplete="off">
+      <label>WhatsApp</label>
+      <input type="tel" id="ch-whatsapp" placeholder="Ej: 5493435000518" autocomplete="off">
+    </div>
+    <div class="modal-error" id="ch-error"></div>
+    <div class="modal-footer" id="ch-footer">
+      <button class="btn-cancelar" id="ch-cancelar-btn">Cancelar</button>
+      <button class="btn-guardar" id="ch-guardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="confirm-modal" class="hidden">
   <div class="confirm-box">
     <div class="confirm-icon">
@@ -341,6 +365,7 @@
   <div class="pill-tabs">
     <button id="tab-pedido" data-tab="pedido" class="active">Pedido</button>
     <button id="tab-clientes" data-tab="clientes">Clientes</button>
+    <button id="tab-choferes" data-tab="choferes">Choferes</button>
   </div>
 
   <div class="search-wrap">
@@ -358,7 +383,7 @@
   </div>
 </div>
 
-<button id="fab-nuevo-cliente" class="fab hidden" aria-label="Nuevo cliente">
+<button id="fab-nuevo" class="fab hidden" aria-label="Agregar">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
 
@@ -499,7 +524,7 @@ const mainEl = document.getElementById('main');
 const searchEl = document.getElementById('search');
 const btnRefresh = document.getElementById('btn-refresh');
 const barraAcciones = document.getElementById('barra-acciones');
-const fabNuevoCliente = document.getElementById('fab-nuevo-cliente');
+const fabNuevo = document.getElementById('fab-nuevo');
 
 async function cargarDatos(){
   btnRefresh.classList.add('spinning');
@@ -556,10 +581,11 @@ function render(){
   );
 
   barraAcciones.classList.toggle('hidden', currentTab !== 'pedido');
-  fabNuevoCliente.classList.toggle('hidden', currentTab !== 'clientes');
+  fabNuevo.classList.toggle('hidden', currentTab === 'pedido');
 
   if(currentTab === 'pedido') renderPedido(filtrados);
-  else renderClientes(filtrados);
+  else if(currentTab === 'clientes') renderClientes(filtrados);
+  else renderChoferes();
 }
 
 function renderPedido(lista){
@@ -634,6 +660,27 @@ function renderClientes(lista){
   mainEl.innerHTML = html;
   mainEl.querySelectorAll('.cliente-card').forEach(el => {
     el.addEventListener('click', () => abrirEditarCliente(el.dataset.cliente));
+  });
+}
+
+function renderChoferes(){
+  if(!repartos.length){
+    mainEl.innerHTML = `<div class="state-msg">No hay choferes cargados. Tocá el botón + para agregar el primero.</div>`;
+    return;
+  }
+  let html = '';
+  repartos.forEach(r => {
+    html += `<div class="cliente-card" data-reparto="${escapeHtml(r.Reparto)}">
+      <div class="cliente-info">
+        <div class="cliente-nombre">Reparto ${escapeHtml(r.Reparto)}</div>
+        <div class="cliente-sub">${escapeHtml(r.Chofer || 'Sin nombre')} · ${escapeHtml(r.WhatsApp || 'Sin WhatsApp')}</div>
+      </div>
+      <span class="cliente-badge vacio">Editar</span>
+    </div>`;
+  });
+  mainEl.innerHTML = html;
+  mainEl.querySelectorAll('.cliente-card').forEach(el => {
+    el.addEventListener('click', () => abrirEditarChofer(el.dataset.reparto));
   });
 }
 
@@ -735,7 +782,10 @@ const ncNombreOriginal = document.getElementById('nc-nombre-original');
 const ncError = document.getElementById('nc-error');
 const ncFooter = document.getElementById('nc-footer');
 
-fabNuevoCliente.addEventListener('click', () => abrirNuevoCliente());
+fabNuevo.addEventListener('click', () => {
+  if(currentTab === 'clientes') abrirNuevoCliente();
+  else if(currentTab === 'choferes') abrirNuevoChofer();
+});
 
 function abrirNuevoCliente(){
   ncTitulo.textContent = 'Nuevo cliente';
@@ -796,6 +846,89 @@ async function guardarCliente(){
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
   }
+}
+
+/* ============== Modal chofer (nuevo/editar) ============== */
+const choferModal = document.getElementById('chofer-modal');
+const chTitulo = document.getElementById('ch-titulo');
+const chReparto = document.getElementById('ch-reparto');
+const chChofer = document.getElementById('ch-chofer');
+const chWhatsapp = document.getElementById('ch-whatsapp');
+const chRepartoOriginal = document.getElementById('ch-reparto-original');
+const chError = document.getElementById('ch-error');
+const chFooter = document.getElementById('ch-footer');
+
+function abrirNuevoChofer(){
+  chTitulo.textContent = 'Nuevo chofer';
+  chRepartoOriginal.value = '';
+  chReparto.value = ''; chChofer.value = ''; chWhatsapp.value = '';
+  chError.textContent = '';
+  chFooter.innerHTML = `<button class="btn-cancelar" id="ch-cancelar-btn">Cancelar</button><button class="btn-guardar" id="ch-guardar">Guardar</button>`;
+  reengancharFooterChofer();
+  choferModal.classList.remove('hidden');
+}
+
+function abrirEditarChofer(reparto){
+  const r = repartos.find(x => String(x.Reparto) === String(reparto));
+  if(!r) return;
+  chTitulo.textContent = 'Editar chofer';
+  chRepartoOriginal.value = r.Reparto;
+  chReparto.value = r.Reparto || '';
+  chChofer.value = r.Chofer || '';
+  chWhatsapp.value = r.WhatsApp || '';
+  chError.textContent = '';
+  chFooter.innerHTML = `<button class="btn-eliminar-cliente" id="ch-eliminar">Eliminar</button><button class="btn-guardar" id="ch-guardar">Guardar</button>`;
+  reengancharFooterChofer();
+  choferModal.classList.remove('hidden');
+}
+
+function reengancharFooterChofer(){
+  const cancelar = document.getElementById('ch-cancelar-btn');
+  if(cancelar) cancelar.addEventListener('click', () => choferModal.classList.add('hidden'));
+  const eliminar = document.getElementById('ch-eliminar');
+  if(eliminar) eliminar.addEventListener('click', () => pedirConfirmacionEliminarChofer(chRepartoOriginal.value));
+  document.getElementById('ch-guardar').addEventListener('click', guardarChofer);
+}
+
+document.getElementById('ch-cerrar').addEventListener('click', () => choferModal.classList.add('hidden'));
+
+async function guardarChofer(){
+  const reparto = chReparto.value.trim();
+  if(!reparto){ chError.textContent = 'Falta el Reparto'; return; }
+  if(!chWhatsapp.value.trim()){ chError.textContent = 'Falta el WhatsApp del chofer'; return; }
+  const payload = {
+    accion: 'guardarChofer',
+    reparto,
+    chofer: chChofer.value.trim(),
+    whatsapp: chWhatsapp.value.trim(),
+    repartoOriginal: chRepartoOriginal.value
+  };
+  const btn = document.getElementById('ch-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try{
+    const data = await postAppsScript(payload);
+    if(data.error){ chError.textContent = data.error; return; }
+    choferModal.classList.add('hidden');
+    await cargarDatos();
+  }catch(err){
+    chError.textContent = 'Error al guardar: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+function pedirConfirmacionEliminarChofer(reparto){
+  confirmTitulo.textContent = 'Eliminar chofer';
+  confirmTexto.textContent = `Se elimina el chofer del Reparto "${reparto}". Los clientes de ese reparto no se tocan, pero no se va a poder enviar el pedido hasta cargar otro chofer. No se puede deshacer.`;
+  accionConfirmada = async () => {
+    try{
+      const data = await postAppsScript({ accion:'eliminarChofer', reparto });
+      if(data.error){ alert(data.error); return; }
+      choferModal.classList.add('hidden');
+      await cargarDatos();
+    }catch(err){ alert('Error al eliminar: ' + err.message); }
+  };
+  confirmModal.classList.remove('hidden');
 }
 
 /* ============== Confirmaciones (eliminar cliente / vaciar) ============== */
