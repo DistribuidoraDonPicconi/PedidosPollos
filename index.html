@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pedidos</title>
+
+<!-- PWA: instalable en el celular -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="theme-color" content="#16305c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pedidos">
+
+<!-- Login con Google -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style>
+  :root{
+    --azul-osc: #16305c;
+    --azul: #2a5cc9;
+    --azul-suave: #eef3fc;
+    --azul-borde: #d7e2f5;
+    --fondo: #f4f7fc;
+    --linea: #e7ecf5;
+    --verde: #1f8a4c;
+    --rojo: #c0392b;
+    --texto-tenue: #7c8aa3;
+    --app-max-width: 560px;
+  }
+  @media (min-width:900px){
+    main.ancho{
+      position:relative; left:50%; width:min(820px, 94vw); transform:translateX(-50%);
+    }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--fondo);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#1a1f2b;
+  }
+  #app{
+    display:flex; flex-direction:column;
+    height:100vh; height:100dvh;
+    max-width:var(--app-max-width); margin:0 auto;
+    background:var(--fondo);
+  }
+
+  header{ padding:18px 20px 4px; flex-shrink:0; }
+  header .top-row{ display:flex; align-items:flex-start; justify-content:space-between; }
+  header h1{ font-size:26px; margin:0; color:#111624; font-weight:800; letter-spacing:-0.4px; }
+  header .sub{ font-size:14px; color:var(--azul); font-weight:700; margin-top:4px; letter-spacing:0.2px; }
+  .icon-btn{
+    background:#fff; border:1px solid var(--azul-borde); padding:10px; cursor:pointer;
+    color:var(--azul); display:flex; align-items:center; justify-content:center;
+    border-radius:12px; box-shadow:0 1px 2px rgba(22,48,92,0.06);
+  }
+  .icon-btn:active{ background:var(--azul-suave); }
+  .icon-btn svg{ width:18px; height:18px; }
+  .icon-btn.spinning svg{ animation: spin 0.8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .header-actions{ display:flex; gap:8px; }
+
+  .pill-tabs{
+    display:flex; gap:4px;
+    background:#fff; border:1px solid var(--azul-borde);
+    border-radius:14px; padding:4px;
+    margin:14px 20px 0; flex-shrink:0;
+    box-shadow:0 1px 3px rgba(22,48,92,0.05);
+  }
+  .pill-tabs button{
+    flex:1; border:none; background:transparent; cursor:pointer;
+    padding:11px 8px; border-radius:11px;
+    font-size:15px; font-weight:700; color:var(--texto-tenue);
+  }
+  .pill-tabs button.active{ background:var(--azul); color:#fff; box-shadow:0 2px 6px rgba(42,92,201,0.35); }
+
+  .search-wrap{ padding:12px 20px 6px; flex-shrink:0; }
+  .search-wrap input{
+    width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--azul-borde);
+    background:#fff; font-size:16px; outline:none; color:#1a1f2b;
+  }
+  .search-wrap input:focus{ border-color:var(--azul); }
+  .search-wrap input::placeholder{ color:#a7b2c6; }
+
+  main{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:8px 20px 100px; }
+  .state-msg{ padding:40px 20px; text-align:center; color:var(--texto-tenue); font-size:14px; }
+  .state-msg.error{ color:var(--rojo); }
+
+  /* Grupo por reparto */
+  .grupo{ margin-bottom:18px; }
+  .grupo-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 4px 8px;
+  }
+  .grupo-titulo{ font-size:13px; font-weight:800; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.4px; }
+  .grupo-titulo .cant{ color:#b7c0d4; font-weight:700; margin-left:4px; }
+  .btn-enviar-reparto{
+    display:flex; align-items:center; gap:6px;
+    background:#e9f9ef; color:#178a48; border:1px solid #c7ecd4;
+    border-radius:10px; padding:7px 12px; font-size:13px; font-weight:800;
+    cursor:pointer;
+  }
+  .btn-enviar-reparto:active{ background:#d9f2e2; }
+  .btn-enviar-reparto.deshabilitado{ background:#f4f7fc; color:#b7c0d4; border-color:var(--linea); cursor:default; }
+  .btn-enviar-reparto svg{ width:15px; height:15px; }
+
+  /* Card cliente */
+  .cliente-card{
+    background:#fff; border:1px solid var(--linea); border-radius:14px;
+    padding:13px 14px; margin-bottom:8px; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    box-shadow:0 1px 2px rgba(22,48,92,0.04);
+  }
+  .cliente-card:active{ background:var(--azul-suave); }
+  .cliente-card.cargado{ border-color:var(--azul-borde); background:var(--azul-suave); }
+  .cliente-info{ min-width:0; }
+  .cliente-nombre{ font-size:15.5px; font-weight:700; color:#1a1f2b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cliente-sub{ font-size:12.5px; color:var(--texto-tenue); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cliente-badge{
+    flex-shrink:0; font-size:12px; font-weight:800; padding:5px 10px; border-radius:20px;
+    background:#eef3fc; color:var(--azul);
+  }
+  .cliente-badge.enviado{ background:#e9f9ef; color:#178a48; }
+  .cliente-badge.vacio{ background:transparent; color:#c3cad9; }
+
+  .fab{
+    position:fixed; bottom:26px; right:22px;
+    width:56px; height:56px; border-radius:50%;
+    background:var(--azul); color:#fff; border:none;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 16px rgba(42,92,201,0.45);
+    cursor:pointer; z-index:50;
+  }
+  .fab.hidden{ display:none; }
+  .fab svg{ width:26px; height:26px; }
+  .fab:active{ transform:scale(0.94); }
+
+  /* Barra de acciones (tab Pedido) */
+  .barra-acciones{
+    position:fixed; bottom:0; left:0; right:0; z-index:40;
+    display:flex; gap:10px; padding:12px 20px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, var(--fondo) 60%, rgba(244,247,252,0));
+  }
+  .barra-acciones.hidden{ display:none; }
+  .barra-acciones-inner{ max-width:var(--app-max-width); margin:0 auto; width:100%; display:flex; gap:10px; }
+  .btn-vaciar{
+    flex:1; background:#fff; color:var(--rojo); border:1px solid #f5d6d2;
+    padding:13px; border-radius:13px; font-size:14.5px; font-weight:800; cursor:pointer;
+  }
+  .btn-vaciar:active{ background:#fdf2f1; }
+
+  /* Modal genérico */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:200;
+    background:rgba(17,22,36,0.55);
+    display:flex; align-items:flex-start; justify-content:center;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-box{
+    width:100%; max-width:520px; max-height:88vh; margin:0 14px; margin-top:6vh;
+    background:#fff; border-radius:18px;
+    display:flex; flex-direction:column;
+    box-shadow:0 12px 32px rgba(17,22,36,0.28);
+  }
+  .modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 20px 14px; border-bottom:1px solid var(--linea); flex-shrink:0;
+  }
+  .modal-header h3{ margin:0; font-size:18px; font-weight:800; color:#111624; }
+  .modal-header .modal-sub{ font-size:12.5px; color:var(--texto-tenue); font-weight:600; margin-top:2px; }
+  .modal-close{ background:none; border:none; font-size:26px; line-height:1; cursor:pointer; color:var(--texto-tenue); padding:4px 8px; }
+  .modal-body{ padding:16px 20px 8px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .modal-body label{ display:block; font-size:14px; font-weight:800; color:var(--azul-osc); margin:14px 0 6px; }
+  .modal-body label:first-of-type{ margin-top:0; }
+  .modal-body input[type="text"],
+  .modal-body input[type="tel"]{
+    width:100%; padding:12px 13px; border-radius:12px; border:1px solid var(--azul-borde);
+    background:#fff; font-size:16px; outline:none; color:#1a1f2b;
+  }
+  .modal-body input:focus{ border-color:var(--azul); }
+  .modal-error{ padding:0 20px; color:var(--rojo); font-size:13.5px; font-weight:600; min-height:18px; }
+  .modal-footer{ display:flex; gap:10px; padding:14px 20px 20px; flex-shrink:0; border-top:1px solid var(--linea); }
+  .modal-footer button{ flex:1; padding:14px; border-radius:13px; border:none; font-size:15.5px; font-weight:700; cursor:pointer; }
+  .btn-cancelar{ background:var(--azul-suave); color:var(--azul-osc); }
+  .btn-cancelar:active{ background:var(--azul-borde); }
+  .btn-guardar{ background:var(--azul); color:#fff; }
+  .btn-guardar:active{ opacity:0.9; }
+  .btn-eliminar-cliente{ background:#fdf2f1; color:var(--rojo); }
+  .btn-eliminar-cliente:active{ background:#f9dedb; }
+
+  /* Grid de cantidades por producto */
+  .productos-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+  .producto-item label{ display:block; font-size:12.5px; font-weight:700; color:var(--texto-tenue); margin:0 0 5px; }
+  .producto-item input{
+    width:100%; padding:11px 10px; border-radius:11px; border:1px solid var(--azul-borde);
+    background:#fff; font-size:16px; text-align:center; outline:none; color:#1a1f2b; font-weight:700;
+  }
+  .producto-item input:focus{ border-color:var(--azul); }
+  .producto-item input:not(:placeholder-shown){ background:var(--azul-suave); border-color:var(--azul-borde); }
+
+  .estado-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .estado-btn{
+    border:1px solid var(--azul-borde); background:#fff; cursor:pointer;
+    padding:12px 8px; border-radius:12px; font-size:14px; font-weight:700; color:var(--texto-tenue);
+  }
+  .estado-btn.selected{ background:var(--azul); color:#fff; border-color:var(--azul); }
+  .estado-btn.selected.enviado{ background:var(--verde); border-color:var(--verde); }
+
+  /* Confirmación */
+  #confirm-modal{
+    position:fixed; inset:0; z-index:250;
+    background:rgba(17,22,36,0.55);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  #confirm-modal.hidden{ display:none; }
+  .confirm-box{ width:100%; max-width:320px; background:#fff; border-radius:18px; padding:26px 22px 20px; text-align:center; box-shadow:0 12px 30px rgba(17,22,36,0.25); }
+  .confirm-box .confirm-icon{ width:52px; height:52px; border-radius:50%; background:#fdecea; color:var(--rojo); display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+  .confirm-box .confirm-icon svg{ width:24px; height:24px; }
+  .confirm-box h3{ font-size:17px; margin:0 0 6px; color:#111624; font-weight:800; }
+  .confirm-box p{ font-size:14px; color:var(--texto-tenue); margin:0 0 20px; line-height:1.4; }
+  .confirm-box .confirm-actions{ display:flex; gap:10px; }
+  .confirm-box button{ flex:1; padding:12px; border-radius:12px; border:none; font-size:15px; font-weight:700; cursor:pointer; }
+  .confirm-box .btn-confirmar{ background:var(--rojo); color:#fff; }
+  .confirm-box .btn-confirmar:active{ opacity:0.85; }
+
+  /* Login */
+  #login-screen{
+    position:fixed; inset:0; z-index:300; background:var(--fondo);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px; text-align:center;
+  }
+  #login-screen.hidden{ display:none; }
+  #login-screen h1{ font-size:24px; margin:0 0 4px; color:#111624; font-weight:800; }
+  #login-screen .sub{ font-size:14px; color:var(--azul); font-weight:700; margin-bottom:32px; }
+  #login-screen .login-error{ color:var(--rojo); font-size:13.5px; font-weight:600; margin-top:18px; max-width:300px; min-height:18px; }
+  #login-screen .login-checking{ color:var(--texto-tenue); font-size:14px; }
+  #google-btn-container{ min-height:44px; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <h1>Pedidos</h1>
+  <div class="sub">Reparto de pollo</div>
+  <div id="login-checking" class="login-checking">Verificando sesión...</div>
+  <div id="google-btn-container" style="display:none;"></div>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<!-- Modal cantidades por cliente -->
+<div id="cant-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3 id="cant-titulo">Cliente</h3>
+        <div class="modal-sub" id="cant-sub"></div>
+      </div>
+      <button class="modal-close" id="cant-cerrar" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cant-cliente-id">
+      <label>Cantidades</label>
+      <div class="productos-grid" id="cant-grid"></div>
+      <label>Estado</label>
+      <div class="estado-grid" id="cant-estado-grid"></div>
+      <input type="hidden" id="cant-estado-valor">
+    </div>
+    <div class="modal-error" id="cant-error"></div>
+    <div class="modal-footer">
+      <button class="btn-cancelar" id="cant-cancelar">Cancelar</button>
+      <button class="btn-guardar" id="cant-guardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuevo/editar cliente -->
+<div id="cliente-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="nc-titulo">Nuevo cliente</h3>
+      <button class="modal-close" id="nc-cerrar" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="nc-nombre-original">
+      <label>Nombre</label>
+      <input type="text" id="nc-nombre" placeholder="Ej: Avercon Blanco" autocomplete="off">
+      <label>Reparto</label>
+      <input type="text" id="nc-reparto" placeholder="Ej: 1" list="lista-repartos" autocomplete="off">
+      <datalist id="lista-repartos"></datalist>
+      <label>Localidad</label>
+      <input type="text" id="nc-localidad" placeholder="Ej: El Pingo" autocomplete="off">
+      <label>Contacto (WhatsApp)</label>
+      <input type="tel" id="nc-contacto" placeholder="Ej: 5493435000518" autocomplete="off">
+    </div>
+    <div class="modal-error" id="nc-error"></div>
+    <div class="modal-footer" id="nc-footer">
+      <button class="btn-cancelar" id="nc-cancelar-btn">Cancelar</button>
+      <button class="btn-guardar" id="nc-guardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-modal" class="hidden">
+  <div class="confirm-box">
+    <div class="confirm-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    </div>
+    <h3 id="confirm-titulo">Confirmar</h3>
+    <p id="confirm-texto"></p>
+    <div class="confirm-actions">
+      <button class="btn-cancelar" id="confirm-cancelar">Cancelar</button>
+      <button class="btn-confirmar" id="confirm-aceptar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="top-row">
+      <div>
+        <h1>Pedidos</h1>
+        <div class="sub">Reparto de pollo</div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-refresh" aria-label="Actualizar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-logout" aria-label="Cerrar sesión">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="pill-tabs">
+    <button id="tab-pedido" data-tab="pedido" class="active">Pedido</button>
+    <button id="tab-clientes" data-tab="clientes">Clientes</button>
+  </div>
+
+  <div class="search-wrap">
+    <input type="text" id="search" placeholder="Buscar cliente...">
+  </div>
+
+  <main id="main" class="ancho">
+    <div class="state-msg" id="loading">Cargando datos...</div>
+  </main>
+</div>
+
+<div class="barra-acciones hidden" id="barra-acciones">
+  <div class="barra-acciones-inner">
+    <button class="btn-vaciar" id="btn-vaciar">Vaciar cantidades</button>
+  </div>
+</div>
+
+<button id="fab-nuevo-cliente" class="fab hidden" aria-label="Nuevo cliente">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<script>
+/* ============== CONFIGURACIÓN ============== */
+const CONFIG = {
+  // Pegá acá la URL de tu Web App de Apps Script (termina en /exec)
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx72i_RXuJFt_FN-4e7KH3jkW1a8YbTQ8nwEzIiNGgkbVSzhxomUh9bejJN3DQIXj3p/exec',
+
+  // Mismo Client ID que en Código.gs
+  GOOGLE_CLIENT_ID: '922655936984-eb35rn1hu1855l6b4939qvvl286h7l10.apps.googleusercontent.com',
+
+  // Productos: "codigo" tiene que ser EXACTO al encabezado de la
+  // columna en el Sheet. "label" es el texto que ves en la app: podés
+  // cambiarlo por el nombre real de cada corte sin tocar nada más.
+  PRODUCTOS: [
+    { codigo: 'POLLO', label: 'Pollo' },
+    { codigo: 'UNID',  label: 'Unid' },
+    { codigo: 'CTO',   label: 'Cto' },
+    { codigo: 'FM',    label: 'FM' },
+    { codigo: 'ALA',   label: 'Ala' },
+    { codigo: 'FP',    label: 'FP' },
+    { codigo: 'FB',    label: 'FB' },
+    { codigo: 'PE',    label: 'Pe' },
+    { codigo: 'MEN',   label: 'Men' },
+    { codigo: 'MO',    label: 'Mo' },
+    { codigo: 'CAR',   label: 'Car' },
+    { codigo: 'MED',   label: 'Med' },
+    { codigo: 'FOR',   label: 'For' },
+    { codigo: 'TIR',   label: 'Tir' }
+  ]
+};
+/* ============================================= */
+
+/* ============== LOGIN CON GOOGLE ============== */
+const LOGIN_STORAGE_KEY = 'pedidos_pollo_login';
+
+const loginScreen = document.getElementById('login-screen');
+const loginChecking = document.getElementById('login-checking');
+const googleBtnContainer = document.getElementById('google-btn-container');
+const loginError = document.getElementById('login-error');
+const btnLogout = document.getElementById('btn-logout');
+
+function decodeJwt_(token){
+  try{
+    const base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const json = decodeURIComponent(atob(base64).split('').map(c =>
+      '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    ).join(''));
+    return JSON.parse(json);
+  }catch(err){ return null; }
+}
+
+function sesionGuardada(){
+  try{
+    const raw = localStorage.getItem(LOGIN_STORAGE_KEY);
+    if(!raw) return null;
+    const datos = JSON.parse(raw);
+    if(!datos.token || !datos.exp) return null;
+    if(Date.now() / 1000 > datos.exp - 60) return null;
+    return datos;
+  }catch(err){ return null; }
+}
+
+function guardarSesion(token, payload){
+  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ token, email: payload.email, exp: payload.exp }));
+}
+
+function cerrarSesion(){
+  localStorage.removeItem(LOGIN_STORAGE_KEY);
+  if(window.google && google.accounts && google.accounts.id){
+    google.accounts.id.disableAutoSelect();
+  }
+  mostrarLogin();
+}
+
+function tokenActual(){
+  const sesion = sesionGuardada();
+  return sesion ? sesion.token : null;
+}
+
+function mostrarLogin(){
+  document.getElementById('app').style.display = 'none';
+  loginScreen.classList.remove('hidden');
+  loginChecking.style.display = 'none';
+  googleBtnContainer.style.display = 'block';
+  loginError.textContent = '';
+}
+
+function ocultarLogin(){
+  loginScreen.classList.add('hidden');
+  document.getElementById('app').style.display = '';
+}
+
+function manejarCredencial(response){
+  const payload = decodeJwt_(response.credential);
+  if(!payload){ loginError.textContent = 'No se pudo leer la respuesta de Google.'; return; }
+  guardarSesion(response.credential, payload);
+  ocultarLogin();
+  cargarDatos();
+}
+
+function iniciarLogin(){
+  if(!window.google || !google.accounts || !google.accounts.id){
+    setTimeout(iniciarLogin, 300);
+    return;
+  }
+  google.accounts.id.initialize({ client_id: CONFIG.GOOGLE_CLIENT_ID, callback: manejarCredencial });
+  google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
+
+  const sesion = sesionGuardada();
+  if(sesion){ ocultarLogin(); cargarDatos(); } else { mostrarLogin(); }
+}
+
+btnLogout.addEventListener('click', () => { if(confirm('¿Cerrar sesión?')) cerrarSesion(); });
+/* ================================================ */
+
+async function postAppsScript(payload){
+  const token = tokenActual();
+  if(!token){ cerrarSesion(); throw new Error('Sesión vencida. Iniciá sesión de nuevo.'); }
+  const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(Object.assign({}, payload, { token }))
+  });
+  const data = await resp.json();
+  if(data && data.error && /no autenticado|sesión inválida|no tiene acceso|no autorizado/i.test(data.error)){
+    cerrarSesion();
+  }
+  return data;
+}
+
+let pedidos = [];
+let repartos = [];
+let currentTab = 'pedido';
+let filtro = '';
+
+const mainEl = document.getElementById('main');
+const searchEl = document.getElementById('search');
+const btnRefresh = document.getElementById('btn-refresh');
+const barraAcciones = document.getElementById('barra-acciones');
+const fabNuevoCliente = document.getElementById('fab-nuevo-cliente');
+
+async function cargarDatos(){
+  btnRefresh.classList.add('spinning');
+  try{
+    const token = tokenActual();
+    if(!token){ cerrarSesion(); return; }
+    const url = CONFIG.APPS_SCRIPT_URL + '?token=' + encodeURIComponent(token);
+    const resp = await fetch(url, { cache:'no-store' });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if(data && data.error){
+      if(/no autenticado|sesión inválida|no tiene acceso|no autorizado/i.test(data.error)){
+        cerrarSesion(); loginError.textContent = data.error; return;
+      }
+      pedidos = []; repartos = [];
+      mainEl.innerHTML = `<div class="state-msg error">No se pudieron cargar los datos: ${data.error}</div>`;
+      return;
+    }
+    pedidos = data.pedidos || [];
+    repartos = data.repartos || [];
+    actualizarListaRepartos();
+    render();
+  }catch(err){
+    mainEl.innerHTML = `<div class="state-msg error">No se pudo cargar el Google Sheet.<br>${err.message}<br><br>Revisá que CONFIG.APPS_SCRIPT_URL esté bien configurada.</div>`;
+  }finally{
+    btnRefresh.classList.remove('spinning');
+  }
+}
+
+function actualizarListaRepartos(){
+  const dl = document.getElementById('lista-repartos');
+  const set = new Set(repartos.map(r => String(r.Reparto || '').trim()).filter(Boolean));
+  pedidos.forEach(p => { if(p.Reparto) set.add(String(p.Reparto).trim()); });
+  dl.innerHTML = Array.from(set).map(r => `<option value="${escapeHtml(r)}"></option>`).join('');
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function totalCargado(cliente){
+  return CONFIG.PRODUCTOS.reduce((acc, p) => acc + (Number(cliente[p.codigo]) || 0), 0);
+}
+
+function tieneCantidades(cliente){
+  return CONFIG.PRODUCTOS.some(p => Number(cliente[p.codigo]) > 0);
+}
+
+/* ============== RENDER ============== */
+function render(){
+  const term = filtro.trim().toLowerCase();
+  const filtrados = pedidos.filter(p =>
+    !term || String(p.Cliente||'').toLowerCase().includes(term) || String(p.Localidad||'').toLowerCase().includes(term)
+  );
+
+  barraAcciones.classList.toggle('hidden', currentTab !== 'pedido');
+  fabNuevoCliente.classList.toggle('hidden', currentTab !== 'clientes');
+
+  if(currentTab === 'pedido') renderPedido(filtrados);
+  else renderClientes(filtrados);
+}
+
+function renderPedido(lista){
+  if(!lista.length){
+    mainEl.innerHTML = `<div class="state-msg">No hay clientes cargados todavía. Andá a la pestaña "Clientes" para agregar el primero.</div>`;
+    return;
+  }
+  // Agrupar por reparto, preservando orden de aparición
+  const grupos = new Map();
+  lista.forEach(c => {
+    const key = String(c.Reparto || '').trim() || 'Sin reparto';
+    if(!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(c);
+  });
+
+  let html = '';
+  grupos.forEach((clientes, reparto) => {
+    const conCantidad = clientes.filter(tieneCantidades);
+    const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
+    const puedeEnviar = conCantidad.length > 0 && repartoInfo && repartoInfo.WhatsApp;
+
+    html += `<div class="grupo">
+      <div class="grupo-header">
+        <div class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientes.length}</span></div>
+        <button class="btn-enviar-reparto ${puedeEnviar ? '' : 'deshabilitado'}" data-reparto="${escapeHtml(reparto)}" ${puedeEnviar ? '' : 'disabled'}>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.868-2.03-.967-.273-.099-.472-.148-.67.15-.198.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.99.583 3.845 1.588 5.405L2 22l4.735-1.552A9.947 9.947 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>
+          Enviar
+        </button>
+      </div>`;
+    clientes.forEach(c => {
+      const cargado = tieneCantidades(c);
+      const enviado = String(c.Estado || '').toLowerCase() === 'enviado';
+      let badge = '<span class="cliente-badge vacio">Vacío</span>';
+      if(enviado) badge = '<span class="cliente-badge enviado">Enviado</span>';
+      else if(cargado) badge = `<span class="cliente-badge">${totalCargado(c)}</span>`;
+      html += `<div class="cliente-card ${cargado ? 'cargado' : ''}" data-cliente="${escapeHtml(c.Cliente)}">
+        <div class="cliente-info">
+          <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
+          <div class="cliente-sub">${escapeHtml(c.Localidad || 'Sin localidad')}</div>
+        </div>
+        ${badge}
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  mainEl.innerHTML = html;
+
+  mainEl.querySelectorAll('.cliente-card').forEach(el => {
+    el.addEventListener('click', () => abrirCantidades(el.dataset.cliente));
+  });
+  mainEl.querySelectorAll('.btn-enviar-reparto').forEach(el => {
+    el.addEventListener('click', () => enviarReparto(el.dataset.reparto));
+  });
+}
+
+function renderClientes(lista){
+  if(!lista.length){
+    mainEl.innerHTML = `<div class="state-msg">No hay clientes cargados. Tocá el botón + para agregar el primero.</div>`;
+    return;
+  }
+  let html = '';
+  lista.forEach(c => {
+    html += `<div class="cliente-card" data-cliente="${escapeHtml(c.Cliente)}">
+      <div class="cliente-info">
+        <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
+        <div class="cliente-sub">${escapeHtml(c.Reparto || 'Sin reparto')} · ${escapeHtml(c.Localidad || 'Sin localidad')}</div>
+      </div>
+      <span class="cliente-badge vacio">Editar</span>
+    </div>`;
+  });
+  mainEl.innerHTML = html;
+  mainEl.querySelectorAll('.cliente-card').forEach(el => {
+    el.addEventListener('click', () => abrirEditarCliente(el.dataset.cliente));
+  });
+}
+
+/* ============== Tabs y búsqueda ============== */
+document.querySelectorAll('.pill-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pill-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    render();
+  });
+});
+searchEl.addEventListener('input', () => { filtro = searchEl.value; render(); });
+btnRefresh.addEventListener('click', cargarDatos);
+
+/* ============== Modal cantidades ============== */
+const cantModal = document.getElementById('cant-modal');
+const cantTitulo = document.getElementById('cant-titulo');
+const cantSub = document.getElementById('cant-sub');
+const cantGrid = document.getElementById('cant-grid');
+const cantEstadoGrid = document.getElementById('cant-estado-grid');
+const cantEstadoValor = document.getElementById('cant-estado-valor');
+const cantClienteId = document.getElementById('cant-cliente-id');
+const cantError = document.getElementById('cant-error');
+
+const ESTADOS = [
+  { valor: '', label: 'Pendiente' },
+  { valor: 'Enviado', label: 'Enviado' }
+];
+
+function abrirCantidades(nombreCliente){
+  const c = pedidos.find(p => p.Cliente === nombreCliente);
+  if(!c) return;
+  cantClienteId.value = nombreCliente;
+  cantTitulo.textContent = c.Cliente;
+  cantSub.textContent = [c.Reparto, c.Localidad].filter(Boolean).join(' · ');
+  cantError.textContent = '';
+
+  cantGrid.innerHTML = CONFIG.PRODUCTOS.map(p => {
+    const val = c[p.codigo];
+    const valStr = (val === undefined || val === null || val === '') ? '' : String(val);
+    return `<div class="producto-item">
+      <label>${escapeHtml(p.label)}</label>
+      <input type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-codigo="${p.codigo}" value="${escapeHtml(valStr)}">
+    </div>`;
+  }).join('');
+
+  const estadoActual = c.Estado || '';
+  cantEstadoValor.value = estadoActual;
+  renderEstadoBotones();
+
+  cantModal.classList.remove('hidden');
+}
+
+function renderEstadoBotones(){
+  const actual = cantEstadoValor.value;
+  cantEstadoGrid.innerHTML = ESTADOS.map(e => `
+    <button type="button" class="estado-btn ${actual === e.valor ? 'selected ' + (e.valor==='Enviado'?'enviado':'') : ''}" data-valor="${escapeHtml(e.valor)}">${e.label}</button>
+  `).join('');
+  cantEstadoGrid.querySelectorAll('.estado-btn').forEach(btn => {
+    btn.addEventListener('click', () => { cantEstadoValor.value = btn.dataset.valor; renderEstadoBotones(); });
+  });
+}
+
+document.getElementById('cant-cerrar').addEventListener('click', () => cantModal.classList.add('hidden'));
+document.getElementById('cant-cancelar').addEventListener('click', () => cantModal.classList.add('hidden'));
+
+document.getElementById('cant-guardar').addEventListener('click', async () => {
+  const cliente = cantClienteId.value;
+  const cantidades = {};
+  cantGrid.querySelectorAll('input').forEach(inp => {
+    const v = inp.value.trim();
+    cantidades[inp.dataset.codigo] = v === '' ? '' : Number(v);
+  });
+  const btn = document.getElementById('cant-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try{
+    const data = await postAppsScript({ accion:'guardarCantidades', cliente, cantidades, estado: cantEstadoValor.value });
+    if(data.error){ cantError.textContent = data.error; return; }
+    const c = pedidos.find(p => p.Cliente === cliente);
+    if(c){ Object.assign(c, cantidades); c.Estado = cantEstadoValor.value; }
+    cantModal.classList.add('hidden');
+    render();
+  }catch(err){
+    cantError.textContent = 'Error al guardar: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+});
+
+/* ============== Modal cliente (nuevo/editar) ============== */
+const clienteModal = document.getElementById('cliente-modal');
+const ncTitulo = document.getElementById('nc-titulo');
+const ncNombre = document.getElementById('nc-nombre');
+const ncReparto = document.getElementById('nc-reparto');
+const ncLocalidad = document.getElementById('nc-localidad');
+const ncContacto = document.getElementById('nc-contacto');
+const ncNombreOriginal = document.getElementById('nc-nombre-original');
+const ncError = document.getElementById('nc-error');
+const ncFooter = document.getElementById('nc-footer');
+
+fabNuevoCliente.addEventListener('click', () => abrirNuevoCliente());
+
+function abrirNuevoCliente(){
+  ncTitulo.textContent = 'Nuevo cliente';
+  ncNombreOriginal.value = '';
+  ncNombre.value = ''; ncReparto.value = ''; ncLocalidad.value = ''; ncContacto.value = '';
+  ncError.textContent = '';
+  ncNombre.disabled = false;
+  ncFooter.innerHTML = `<button class="btn-cancelar" id="nc-cancelar-btn">Cancelar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
+  reengancharFooterCliente();
+  clienteModal.classList.remove('hidden');
+}
+
+function abrirEditarCliente(nombreCliente){
+  const c = pedidos.find(p => p.Cliente === nombreCliente);
+  if(!c) return;
+  ncTitulo.textContent = 'Editar cliente';
+  ncNombreOriginal.value = c.Cliente;
+  ncNombre.value = c.Cliente || '';
+  ncReparto.value = c.Reparto || '';
+  ncLocalidad.value = c.Localidad || '';
+  ncContacto.value = c.Contacto || '';
+  ncError.textContent = '';
+  ncFooter.innerHTML = `<button class="btn-eliminar-cliente" id="nc-eliminar">Eliminar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
+  reengancharFooterCliente();
+  clienteModal.classList.remove('hidden');
+}
+
+function reengancharFooterCliente(){
+  const cancelar = document.getElementById('nc-cancelar-btn');
+  if(cancelar) cancelar.addEventListener('click', () => clienteModal.classList.add('hidden'));
+  const eliminar = document.getElementById('nc-eliminar');
+  if(eliminar) eliminar.addEventListener('click', () => pedirConfirmacionEliminarCliente(ncNombreOriginal.value));
+  document.getElementById('nc-guardar').addEventListener('click', guardarCliente);
+}
+
+document.getElementById('nc-cerrar').addEventListener('click', () => clienteModal.classList.add('hidden'));
+
+async function guardarCliente(){
+  const cliente = ncNombre.value.trim();
+  if(!cliente){ ncError.textContent = 'Falta el nombre del cliente'; return; }
+  const payload = {
+    accion: 'guardarCliente',
+    cliente,
+    reparto: ncReparto.value.trim(),
+    localidad: ncLocalidad.value.trim(),
+    contacto: ncContacto.value.trim(),
+    nombreOriginal: ncNombreOriginal.value
+  };
+  const btn = document.getElementById('nc-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try{
+    const data = await postAppsScript(payload);
+    if(data.error){ ncError.textContent = data.error; return; }
+    clienteModal.classList.add('hidden');
+    await cargarDatos();
+  }catch(err){
+    ncError.textContent = 'Error al guardar: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+/* ============== Confirmaciones (eliminar cliente / vaciar) ============== */
+const confirmModal = document.getElementById('confirm-modal');
+const confirmTitulo = document.getElementById('confirm-titulo');
+const confirmTexto = document.getElementById('confirm-texto');
+let accionConfirmada = null;
+
+document.getElementById('confirm-cancelar').addEventListener('click', () => confirmModal.classList.add('hidden'));
+document.getElementById('confirm-aceptar').addEventListener('click', async () => {
+  if(accionConfirmada) await accionConfirmada();
+  confirmModal.classList.add('hidden');
+});
+
+function pedirConfirmacionEliminarCliente(nombreCliente){
+  confirmTitulo.textContent = 'Eliminar cliente';
+  confirmTexto.textContent = `Se elimina a "${nombreCliente}" junto con lo que tenga cargado en este pedido. No se puede deshacer.`;
+  accionConfirmada = async () => {
+    try{
+      const data = await postAppsScript({ accion:'eliminarCliente', cliente: nombreCliente });
+      if(data.error){ alert(data.error); return; }
+      clienteModal.classList.add('hidden');
+      await cargarDatos();
+    }catch(err){ alert('Error al eliminar: ' + err.message); }
+  };
+  confirmModal.classList.remove('hidden');
+}
+
+document.getElementById('btn-vaciar').addEventListener('click', () => {
+  confirmTitulo.textContent = 'Vaciar cantidades';
+  confirmTexto.textContent = 'Se borran las cantidades cargadas de TODOS los clientes para empezar un pedido nuevo. La lista de clientes no se toca. No se puede deshacer.';
+  accionConfirmada = async () => {
+    try{
+      const data = await postAppsScript({ accion:'vaciarCantidades' });
+      if(data.error){ alert(data.error); return; }
+      await cargarDatos();
+    }catch(err){ alert('Error al vaciar: ' + err.message); }
+  };
+  confirmModal.classList.remove('hidden');
+});
+
+/* ============== Enviar mensaje por reparto ============== */
+function limpiarNumero(n){
+  return String(n || '').replace(/[^0-9]/g, '');
+}
+
+async function enviarReparto(reparto){
+  const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
+  if(!repartoInfo || !repartoInfo.WhatsApp){
+    alert('Falta cargar el WhatsApp del chofer para este reparto en la hoja "Repartos".');
+    return;
+  }
+  const clientes = pedidos.filter(c => (String(c.Reparto||'').trim() || 'Sin reparto') === reparto && tieneCantidades(c));
+  if(!clientes.length) return;
+
+  const fecha = new Date();
+  const fechaStr = String(fecha.getDate()).padStart(2,'0') + '/' + String(fecha.getMonth()+1).padStart(2,'0');
+  let texto = `📦 Pedido Reparto ${reparto} - ${fechaStr}\n\n`;
+  clientes.forEach(c => {
+    const items = CONFIG.PRODUCTOS
+      .filter(p => Number(c[p.codigo]) > 0)
+      .map(p => `${p.label} ${c[p.codigo]}`)
+      .join(', ');
+    texto += `*${c.Cliente}*${c.Localidad ? ' (' + c.Localidad + ')' : ''}: ${items}\n`;
+  });
+
+  const numero = limpiarNumero(repartoInfo.WhatsApp);
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank');
+
+  try{
+    await postAppsScript({ accion:'marcarEnviados', clientes: clientes.map(c => c.Cliente) });
+    clientes.forEach(c => { c.Estado = 'Enviado'; });
+    render();
+  }catch(err){
+    // El mensaje ya se abrió igual; si falla marcar como enviado no es grave.
+  }
+}
+
+/* ============== Arranque ============== */
+iniciarLogin();
+
+/* ============== PWA: registrar Service Worker ============== */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
