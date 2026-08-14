@@ -67,20 +67,21 @@
   .header-actions{ display:flex; gap:8px; }
 
   .pill-tabs{
-    display:flex; gap:4px;
+    display:grid; grid-template-columns:1fr 1fr; gap:4px;
     background:#fff; border:1px solid var(--azul-borde);
     border-radius:14px; padding:4px;
     margin:14px 20px 0; flex-shrink:0;
     box-shadow:0 1px 3px rgba(22,48,92,0.05);
   }
   .pill-tabs button{
-    flex:1; border:none; background:transparent; cursor:pointer;
-    padding:11px 8px; border-radius:11px;
-    font-size:15px; font-weight:700; color:var(--texto-tenue);
+    border:none; background:transparent; cursor:pointer;
+    padding:10px 8px; border-radius:11px;
+    font-size:14px; font-weight:700; color:var(--texto-tenue);
   }
   .pill-tabs button.active{ background:var(--azul); color:#fff; box-shadow:0 2px 6px rgba(42,92,201,0.35); }
 
   .search-wrap{ padding:12px 20px 6px; flex-shrink:0; }
+  .search-wrap.hidden{ display:none; }
   .search-wrap input{
     width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--azul-borde);
     background:#fff; font-size:16px; outline:none; color:#1a1f2b;
@@ -109,6 +110,25 @@
   .btn-enviar-reparto:active{ background:#d9f2e2; }
   .btn-enviar-reparto.deshabilitado{ background:#f4f7fc; color:#b7c0d4; border-color:var(--linea); cursor:default; }
   .btn-enviar-reparto svg{ width:15px; height:15px; }
+
+  /* Resumen */
+  .resumen-tabla{
+    width:100%; border-collapse:collapse; background:#fff;
+    border:1px solid var(--linea); border-radius:14px; overflow:hidden;
+    box-shadow:0 1px 2px rgba(22,48,92,0.04); font-size:13px;
+  }
+  .resumen-tabla th, .resumen-tabla td{
+    padding:9px 10px; text-align:right; white-space:nowrap;
+  }
+  .resumen-tabla th:first-child, .resumen-tabla td:first-child{ text-align:left; }
+  .resumen-tabla thead th{
+    background:var(--azul-suave); color:var(--azul); font-weight:800;
+    font-size:11.5px; text-transform:uppercase; letter-spacing:0.3px;
+  }
+  .resumen-tabla tbody tr{ border-top:1px solid var(--linea); }
+  .resumen-tabla tbody tr.fila-total{ font-weight:800; background:#f4f7fc; }
+  .resumen-scroll{ overflow-x:auto; border-radius:14px; margin-bottom:18px; }
+  .resumen-nota{ font-size:12px; color:var(--texto-tenue); margin:-10px 0 16px; }
 
   /* Card cliente */
   .cliente-card{
@@ -374,6 +394,7 @@
     <button id="tab-pedido" data-tab="pedido" class="active">Pedido</button>
     <button id="tab-clientes" data-tab="clientes">Clientes</button>
     <button id="tab-choferes" data-tab="choferes">Choferes</button>
+    <button id="tab-resumen" data-tab="resumen">Resumen</button>
   </div>
 
   <div class="search-wrap">
@@ -408,20 +429,20 @@ const CONFIG = {
   // columna en el Sheet. "label" es el texto que ves en la app: podés
   // cambiarlo por el nombre real de cada corte sin tocar nada más.
   PRODUCTOS: [
-    { codigo: 'POLLO', label: 'Pollo' },
-    { codigo: 'UNID',  label: 'Unid' },
-    { codigo: 'CTO',   label: 'Cto' },
+    { codigo: 'POLLO', label: 'POLLO' },
+    { codigo: 'UNID',  label: 'UNID' },
+    { codigo: 'CTO',   label: 'CTO' },
     { codigo: 'FM',    label: 'FM' },
-    { codigo: 'ALA',   label: 'Ala' },
+    { codigo: 'ALA',   label: 'ALA' },
     { codigo: 'FP',    label: 'FP' },
     { codigo: 'FB',    label: 'FB' },
-    { codigo: 'PE',    label: 'Pe' },
-    { codigo: 'MEN',   label: 'Men' },
-    { codigo: 'MO',    label: 'Mo' },
-    { codigo: 'CAR',   label: 'Car' },
-    { codigo: 'MED',   label: 'Med' },
-    { codigo: 'FOR',   label: 'For' },
-    { codigo: 'TIR',   label: 'Tir' }
+    { codigo: 'PE',    label: 'PE' },
+    { codigo: 'MEN',   label: 'MEN' },
+    { codigo: 'MO',    label: 'MO' },
+    { codigo: 'CAR',   label: 'CAR' },
+    { codigo: 'MED',   label: 'MED' },
+    { codigo: 'FOR',   label: 'FOR' },
+    { codigo: 'TIR',   label: 'TIR' }
   ]
 };
 /* ============================================= */
@@ -530,6 +551,7 @@ let filtro = '';
 
 const mainEl = document.getElementById('main');
 const searchEl = document.getElementById('search');
+const searchWrapEl = document.querySelector('.search-wrap');
 const btnRefresh = document.getElementById('btn-refresh');
 const barraAcciones = document.getElementById('barra-acciones');
 const fabNuevo = document.getElementById('fab-nuevo');
@@ -581,11 +603,13 @@ function render(){
   );
 
   barraAcciones.classList.toggle('hidden', currentTab !== 'pedido');
-  fabNuevo.classList.toggle('hidden', currentTab === 'pedido');
+  fabNuevo.classList.toggle('hidden', currentTab === 'pedido' || currentTab === 'resumen');
+  searchWrapEl.classList.toggle('hidden', currentTab === 'resumen');
 
   if(currentTab === 'pedido') renderPedido(filtrados);
   else if(currentTab === 'clientes') renderClientes(filtrados);
-  else renderChoferes();
+  else if(currentTab === 'choferes') renderChoferes();
+  else renderResumen(pedidos);
 }
 
 function renderPedido(lista){
@@ -604,8 +628,9 @@ function renderPedido(lista){
   let html = '';
   grupos.forEach((clientes, reparto) => {
     const conCantidad = clientes.filter(tieneCantidades);
+    const pendientes = conCantidad.filter(c => String(c.Estado || '').toLowerCase() !== 'enviado');
     const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
-    const puedeEnviar = conCantidad.length > 0 && repartoInfo && repartoInfo.WhatsApp;
+    const puedeEnviar = pendientes.length > 0 && repartoInfo && repartoInfo.WhatsApp;
 
     html += `<div class="grupo">
       <div class="grupo-header">
@@ -661,6 +686,73 @@ function renderClientes(lista){
   mainEl.querySelectorAll('.cliente-card').forEach(el => {
     el.addEventListener('click', () => abrirEditarCliente(el.dataset.cliente));
   });
+}
+
+function renderResumen(lista){
+  const conCantidad = lista.filter(tieneCantidades);
+  if(!conCantidad.length){
+    mainEl.innerHTML = `<div class="state-msg">Todavía no hay cantidades cargadas para resumir.</div>`;
+    return;
+  }
+
+  // Agrupar por reparto
+  const grupos = new Map();
+  conCantidad.forEach(c => {
+    const key = String(c.Reparto || '').trim() || 'Sin reparto';
+    if(!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(c);
+  });
+
+  // Solo mostrar columnas de productos que tengan al menos una unidad cargada en total
+  const productosConDatos = CONFIG.PRODUCTOS.filter(p =>
+    conCantidad.some(c => Number(c[p.codigo]) > 0)
+  );
+
+  const totalesGenerales = {};
+  productosConDatos.forEach(p => { totalesGenerales[p.codigo] = 0; });
+
+  let filas = '';
+  grupos.forEach((clientes, reparto) => {
+    const totalesReparto = {};
+    productosConDatos.forEach(p => { totalesReparto[p.codigo] = 0; });
+    clientes.forEach(c => {
+      productosConDatos.forEach(p => {
+        const val = Number(c[p.codigo]) || 0;
+        totalesReparto[p.codigo] += val;
+        totalesGenerales[p.codigo] += val;
+      });
+    });
+    const sumaFila = productosConDatos.reduce((acc, p) => acc + totalesReparto[p.codigo], 0);
+    filas += `<tr>
+      <td>${escapeHtml(reparto)}</td>
+      ${productosConDatos.map(p => `<td>${totalesReparto[p.codigo] || ''}</td>`).join('')}
+      <td><strong>${sumaFila}</strong></td>
+    </tr>`;
+  });
+
+  const sumaTotal = productosConDatos.reduce((acc, p) => acc + totalesGenerales[p.codigo], 0);
+  filas += `<tr class="fila-total">
+    <td>Total</td>
+    ${productosConDatos.map(p => `<td>${totalesGenerales[p.codigo] || ''}</td>`).join('')}
+    <td>${sumaTotal}</td>
+  </tr>`;
+
+  const html = `
+    <div class="resumen-nota">Suma de cantidades cargadas por reparto (incluye pedidos ya enviados).</div>
+    <div class="resumen-scroll">
+      <table class="resumen-tabla">
+        <thead>
+          <tr>
+            <th>Reparto</th>
+            ${productosConDatos.map(p => `<th>${escapeHtml(p.label)}</th>`).join('')}
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>`;
+
+  mainEl.innerHTML = html;
 }
 
 function renderChoferes(){
@@ -1001,8 +1093,15 @@ async function enviarReparto(reparto){
     alert('Falta cargar el WhatsApp del chofer para este reparto en la hoja "Repartos".');
     return;
   }
-  const clientes = pedidos.filter(c => (String(c.Reparto||'').trim() || 'Sin reparto') === reparto && tieneCantidades(c));
-  if(!clientes.length) return;
+  const clientes = pedidos.filter(c =>
+    (String(c.Reparto||'').trim() || 'Sin reparto') === reparto
+    && tieneCantidades(c)
+    && String(c.Estado || '').toLowerCase() !== 'enviado'
+  );
+  if(!clientes.length){
+    alert('No hay pedidos nuevos para enviar en este reparto (ya están todos marcados como Enviado).');
+    return;
+  }
 
   const fecha = new Date();
   const fechaStr = String(fecha.getDate()).padStart(2,'0') + '/' + String(fecha.getMonth()+1).padStart(2,'0');
