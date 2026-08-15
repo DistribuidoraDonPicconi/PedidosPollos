@@ -560,6 +560,7 @@ let pedidos = [];
 let repartos = [];
 let currentTab = 'pedido';
 let gruposColapsados = new Set();
+let gruposColapsadosClientes = new Set();
 let filtro = '';
 
 const mainEl = document.getElementById('main');
@@ -698,19 +699,50 @@ function renderClientes(lista){
     mainEl.innerHTML = `<div class="state-msg">No hay clientes cargados. Tocá el botón + para agregar el primero.</div>`;
     return;
   }
-  let html = '';
+  // Agrupar por reparto, preservando orden de aparición
+  const grupos = new Map();
   lista.forEach(c => {
-    html += `<div class="cliente-card" data-cliente="${escapeHtml(c.Cliente)}">
-      <div class="cliente-info">
-        <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
-        <div class="cliente-sub">${escapeHtml(c.Reparto || 'Sin reparto')} · ${escapeHtml(c.Localidad || 'Sin localidad')}</div>
-      </div>
-      <span class="cliente-badge vacio">Editar</span>
-    </div>`;
+    const key = String(c.Reparto || '').trim() || 'Sin reparto';
+    if(!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(c);
   });
+
+  let html = '';
+  grupos.forEach((clientes, reparto) => {
+    const colapsado = gruposColapsadosClientes.has(reparto);
+
+    html += `<div class="grupo">
+      <div class="grupo-header">
+        <button type="button" class="grupo-titulo-btn ${colapsado ? 'colapsado' : ''}" data-reparto="${escapeHtml(reparto)}">
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientes.length}</span></span>
+        </button>
+      </div>
+      <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
+    clientes.forEach(c => {
+      html += `<div class="cliente-card" data-cliente="${escapeHtml(c.Cliente)}">
+        <div class="cliente-info">
+          <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
+          <div class="cliente-sub">${escapeHtml(c.Localidad || 'Sin localidad')}</div>
+        </div>
+        <span class="cliente-badge vacio">Editar</span>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+
   mainEl.innerHTML = html;
+
   mainEl.querySelectorAll('.cliente-card').forEach(el => {
     el.addEventListener('click', () => abrirEditarCliente(el.dataset.cliente));
+  });
+  mainEl.querySelectorAll('.grupo-titulo-btn').forEach(el => {
+    el.addEventListener('click', () => {
+      const reparto = el.dataset.reparto;
+      if(gruposColapsadosClientes.has(reparto)) gruposColapsadosClientes.delete(reparto);
+      else gruposColapsadosClientes.add(reparto);
+      render();
+    });
   });
 }
 
