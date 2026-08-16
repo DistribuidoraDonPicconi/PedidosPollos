@@ -1210,7 +1210,7 @@ async function enviarReparto(reparto){
       .filter(p => Number(c[p.codigo]) > 0)
       .map(p => `${p.label} ${c[p.codigo]}`)
       .join(', ');
-    texto += `*${c.Cliente}*${c.Localidad ? ' (' + c.Localidad + ')' : ''}: ${items}\n`;
+    texto += `*${c.Cliente}*${c.Localidad ? ' (' + c.Localidad + ')' : ''}\n${items}\n\n`;
   });
 
   const numero = limpiarNumero(repartoInfo.WhatsApp);
