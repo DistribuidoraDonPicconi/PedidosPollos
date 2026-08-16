@@ -1011,12 +1011,27 @@ async function guardarCliente(){
   try{
     const data = await postAppsScript(payload);
     if(data.error){ ncError.textContent = data.error; return; }
+    aplicarClienteGuardado(data.clienteGuardado, data.nombreOriginal);
     clienteModal.classList.add('hidden');
-    await cargarDatos();
+    render();
   }catch(err){
     ncError.textContent = 'Error al guardar: ' + err.message;
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+// Actualiza el array local `pedidos` con la fila que ya devolvió el
+// servidor, sin volver a pedir toda la hoja (mismo patrón que la app de
+// Saldos, que por eso sincroniza rápido).
+function aplicarClienteGuardado(clienteGuardado, nombreOriginal){
+  if(!clienteGuardado) return;
+  if(nombreOriginal){
+    const idx = pedidos.findIndex(p => p.Cliente === nombreOriginal);
+    if(idx >= 0) pedidos[idx] = clienteGuardado;
+    else pedidos.push(clienteGuardado);
+  }else{
+    pedidos.push(clienteGuardado);
   }
 }
 
@@ -1083,12 +1098,25 @@ async function guardarChofer(){
   try{
     const data = await postAppsScript(payload);
     if(data.error){ chError.textContent = data.error; return; }
+    aplicarChoferGuardado(data.choferGuardado, data.repartoOriginal);
     choferModal.classList.add('hidden');
-    await cargarDatos();
+    render();
   }catch(err){
     chError.textContent = 'Error al guardar: ' + err.message;
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+// Igual que aplicarClienteGuardado, pero para el array local `repartos`.
+function aplicarChoferGuardado(choferGuardado, repartoOriginal){
+  if(!choferGuardado) return;
+  if(repartoOriginal){
+    const idx = repartos.findIndex(r => String(r.Reparto) === String(repartoOriginal));
+    if(idx >= 0) repartos[idx] = choferGuardado;
+    else repartos.push(choferGuardado);
+  }else{
+    repartos.push(choferGuardado);
   }
 }
 
@@ -1099,8 +1127,10 @@ function pedirConfirmacionEliminarChofer(reparto){
     try{
       const data = await postAppsScript({ accion:'eliminarChofer', reparto });
       if(data.error){ alert(data.error); return; }
+      const eliminado = String(data.repartoEliminado || reparto);
+      repartos = repartos.filter(r => String(r.Reparto) !== eliminado);
       choferModal.classList.add('hidden');
-      await cargarDatos();
+      render();
     }catch(err){ alert('Error al eliminar: ' + err.message); }
   };
   confirmModal.classList.remove('hidden');
@@ -1125,8 +1155,10 @@ function pedirConfirmacionEliminarCliente(nombreCliente){
     try{
       const data = await postAppsScript({ accion:'eliminarCliente', cliente: nombreCliente });
       if(data.error){ alert(data.error); return; }
+      const eliminado = String(data.clienteEliminado || nombreCliente);
+      pedidos = pedidos.filter(p => p.Cliente !== eliminado);
       clienteModal.classList.add('hidden');
-      await cargarDatos();
+      render();
     }catch(err){ alert('Error al eliminar: ' + err.message); }
   };
   confirmModal.classList.remove('hidden');
@@ -1139,7 +1171,11 @@ document.getElementById('btn-vaciar').addEventListener('click', () => {
     try{
       const data = await postAppsScript({ accion:'vaciarCantidades' });
       if(data.error){ alert(data.error); return; }
-      await cargarDatos();
+      pedidos.forEach(p => {
+        CONFIG.PRODUCTOS.forEach(prod => { p[prod.codigo] = ''; });
+        p.Estado = '';
+      });
+      render();
     }catch(err){ alert('Error al vaciar: ' + err.message); }
   };
   confirmModal.classList.remove('hidden');
