@@ -70,7 +70,7 @@
   .header-actions{ display:flex; gap:8px; }
 
   .pill-tabs{
-    display:grid; grid-template-columns:1fr 1fr; gap:4px;
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;
     background:#fff; border:1px solid var(--azul-borde);
     border-radius:14px; padding:4px;
     margin:14px 20px 0; flex-shrink:0;
@@ -123,25 +123,6 @@
   .btn-enviar-reparto:active{ background:#d9f2e2; }
   .btn-enviar-reparto.deshabilitado{ background:#f4f7fc; color:#b7c0d4; border-color:var(--linea); cursor:default; }
   .btn-enviar-reparto svg{ width:15px; height:15px; }
-
-  /* Resumen */
-  .resumen-tabla{
-    width:100%; border-collapse:collapse; background:#fff;
-    border:1px solid var(--linea); border-radius:14px; overflow:hidden;
-    box-shadow:0 1px 2px rgba(22,48,92,0.04); font-size:13px;
-  }
-  .resumen-tabla th, .resumen-tabla td{
-    padding:9px 10px; text-align:right; white-space:nowrap;
-  }
-  .resumen-tabla th:first-child, .resumen-tabla td:first-child{ text-align:left; }
-  .resumen-tabla thead th{
-    background:var(--azul-suave); color:var(--azul); font-weight:800;
-    font-size:11.5px; text-transform:uppercase; letter-spacing:0.3px;
-  }
-  .resumen-tabla tbody tr{ border-top:1px solid var(--linea); }
-  .resumen-tabla tbody tr.fila-total{ font-weight:800; background:#f4f7fc; }
-  .resumen-scroll{ overflow-x:auto; border-radius:14px; margin-bottom:18px; }
-  .resumen-nota{ font-size:12px; color:var(--texto-tenue); margin:-10px 0 16px; }
 
   /* Card cliente */
   .cliente-card{
@@ -409,7 +390,6 @@
     <button id="tab-pedido" data-tab="pedido" class="active">Pedido</button>
     <button id="tab-clientes" data-tab="clientes">Clientes</button>
     <button id="tab-choferes" data-tab="choferes">Choferes</button>
-    <button id="tab-resumen" data-tab="resumen">Resumen</button>
   </div>
 
   <div class="search-wrap">
@@ -435,7 +415,7 @@
 /* ============== CONFIGURACIÓN ============== */
 const CONFIG = {
   // Pegá acá la URL de tu Web App de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx72i_RXuJFt_FN-4e7KH3jkW1a8YbTQ8nwEzIiNGgkbVSzhxomUh9bejJN3DQIXj3p/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwksBz4sD1JVt24RnlUD2_wB4cuhtS8ikKenwOHQN5BnznzKUgO-4cXsZ5XtipgsT8O/exec',
 
   // Mismo Client ID que en Código.gs
   GOOGLE_CLIENT_ID: '922655936984-eb35rn1hu1855l6b4939qvvl286h7l10.apps.googleusercontent.com',
@@ -623,10 +603,6 @@ function formatearItemProducto(p, cantidad){
   return `${p.label} ${cantidad}`;
 }
 
-function totalCargado(cliente){
-  return CONFIG.PRODUCTOS.reduce((acc, p) => acc + (Number(cliente[p.codigo]) || 0), 0);
-}
-
 function tieneCantidades(cliente){
   return CONFIG.PRODUCTOS.some(p => Number(cliente[p.codigo]) > 0);
 }
@@ -639,13 +615,11 @@ function render(){
   );
 
   barraAcciones.classList.toggle('hidden', currentTab !== 'pedido');
-  fabNuevo.classList.toggle('hidden', currentTab === 'pedido' || currentTab === 'resumen');
-  searchWrapEl.classList.toggle('hidden', currentTab === 'resumen');
+  fabNuevo.classList.toggle('hidden', currentTab === 'pedido');
 
   if(currentTab === 'pedido') renderPedido(filtrados);
   else if(currentTab === 'clientes') renderClientes(filtrados);
-  else if(currentTab === 'choferes') renderChoferes();
-  else renderResumen(pedidos);
+  else renderChoferes();
 }
 
 function renderPedido(lista){
@@ -686,7 +660,7 @@ function renderPedido(lista){
       const enviado = String(c.Estado || '').toLowerCase() === 'enviado';
       let badge = '<span class="cliente-badge vacio">Vacío</span>';
       if(enviado) badge = '<span class="cliente-badge enviado">Enviado</span>';
-      else if(cargado) badge = `<span class="cliente-badge">${totalCargado(c)}</span>`;
+      else if(cargado) badge = '<span class="cliente-badge">Pendiente</span>';
       html += `<div class="cliente-card ${cargado ? 'cargado' : ''}" data-cliente="${escapeHtml(c.Cliente)}">
         <div class="cliente-info">
           <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
@@ -766,73 +740,6 @@ function renderClientes(lista){
       render();
     });
   });
-}
-
-function renderResumen(lista){
-  const conCantidad = lista.filter(tieneCantidades);
-  if(!conCantidad.length){
-    mainEl.innerHTML = `<div class="state-msg">Todavía no hay cantidades cargadas para resumir.</div>`;
-    return;
-  }
-
-  // Agrupar por reparto
-  const grupos = new Map();
-  conCantidad.forEach(c => {
-    const key = String(c.Reparto || '').trim() || 'Sin reparto';
-    if(!grupos.has(key)) grupos.set(key, []);
-    grupos.get(key).push(c);
-  });
-
-  // Solo mostrar columnas de productos que tengan al menos una unidad cargada en total
-  const productosConDatos = CONFIG.PRODUCTOS.filter(p =>
-    conCantidad.some(c => Number(c[p.codigo]) > 0)
-  );
-
-  const totalesGenerales = {};
-  productosConDatos.forEach(p => { totalesGenerales[p.codigo] = 0; });
-
-  let filas = '';
-  grupos.forEach((clientes, reparto) => {
-    const totalesReparto = {};
-    productosConDatos.forEach(p => { totalesReparto[p.codigo] = 0; });
-    clientes.forEach(c => {
-      productosConDatos.forEach(p => {
-        const val = Number(c[p.codigo]) || 0;
-        totalesReparto[p.codigo] += val;
-        totalesGenerales[p.codigo] += val;
-      });
-    });
-    const sumaFila = productosConDatos.reduce((acc, p) => acc + totalesReparto[p.codigo], 0);
-    filas += `<tr>
-      <td>${escapeHtml(reparto)}</td>
-      ${productosConDatos.map(p => `<td>${totalesReparto[p.codigo] || ''}</td>`).join('')}
-      <td><strong>${sumaFila}</strong></td>
-    </tr>`;
-  });
-
-  const sumaTotal = productosConDatos.reduce((acc, p) => acc + totalesGenerales[p.codigo], 0);
-  filas += `<tr class="fila-total">
-    <td>Total</td>
-    ${productosConDatos.map(p => `<td>${totalesGenerales[p.codigo] || ''}</td>`).join('')}
-    <td>${sumaTotal}</td>
-  </tr>`;
-
-  const html = `
-    <div class="resumen-nota">Suma de cantidades cargadas por reparto (incluye pedidos ya enviados).</div>
-    <div class="resumen-scroll">
-      <table class="resumen-tabla">
-        <thead>
-          <tr>
-            <th>Reparto</th>
-            ${productosConDatos.map(p => `<th>${escapeHtml(p.label)}</th>`).join('')}
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>${filas}</tbody>
-      </table>
-    </div>`;
-
-  mainEl.innerHTML = html;
 }
 
 function renderChoferes(){
