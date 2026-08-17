@@ -1,15 +1,15 @@
-
-const SPREADSHEET_ID = 'PEGAR_AQUI_EL_ID_DE_TU_GOOGLE_SHEET';
+const SPREADSHEET_ID = '1jfQwYsUbLSbHD5lfAV43SzQ2KRilM-Emy4CJQxeKGzk';
 
 const HOJA_PEDIDOS = 'Pedidos';
 const HOJA_CHOFERES = 'Choferes';
 
 // Mismo Client ID que en CONFIG.GOOGLE_CLIENT_ID del index.html
-const GOOGLE_CLIENT_ID = 'PEGAR_AQUI_EL_MISMO_CLIENT_ID_QUE_EN_INDEX.HTML';
+const GOOGLE_CLIENT_ID = '922655936984-eb35rn1hu1855l6b4939qvvl286h7l10.apps.googleusercontent.com';
 
 // Emails de Google autorizados a entrar a la app.
 const EMAILS_AUTORIZADOS = [
-  'tuemail@gmail.com',
+  'nicolaspicconi@gmail.com',
+  'distribuidoradonpicconi@gmail.com',
 ];
 
 // Códigos de producto tal cual van en los encabezados de la hoja.
@@ -112,6 +112,16 @@ function filaSegunEncabezados_(encabezados, datosPorCampo) {
   return encabezados.map(h => (h in datosPorCampo) ? datosPorCampo[h] : '');
 }
 
+// Inversa de filaSegunEncabezados_: arma un objeto {header: valor} a partir
+// de una fila de valores. Se usa para devolverle al cliente la fila recién
+// guardada sin tener que releer toda la hoja (mismo patrón que la app de
+// Saldos, que es la que sincroniza rápido).
+function objetoSegunEncabezados_(encabezados, fila) {
+  const obj = {};
+  encabezados.forEach((h, i) => obj[h] = fila[i]);
+  return obj;
+}
+
 function buscarFilaCliente_(valores, idxCliente, cliente) {
   const buscado = String(cliente || '').trim().toLowerCase();
   for (let i = 1; i < valores.length; i++) {
@@ -208,6 +218,12 @@ function guardarCliente_(payload) {
     hoja.getRange(filaIdx + 1, idxReparto + 1).setValue(reparto);
     hoja.getRange(filaIdx + 1, idxLocalidad + 1).setValue(localidad);
     hoja.getRange(filaIdx + 1, idxContacto + 1).setValue(contacto);
+    const filaGuardada = hoja.getRange(filaIdx + 1, 1, 1, encabezados.length).getValues()[0];
+    return {
+      ok: true,
+      clienteGuardado: objetoSegunEncabezados_(encabezados, filaGuardada),
+      nombreOriginal: nombreOriginal
+    };
   } else {
     // Cliente nuevo
     if (filaConNombreNuevo !== -1) throw new Error('Ya existe un cliente con ese nombre');
@@ -216,8 +232,12 @@ function guardarCliente_(payload) {
       'Localidad': localidad, 'Contacto': contacto
     });
     hoja.appendRow(fila);
+    return {
+      ok: true,
+      clienteGuardado: objetoSegunEncabezados_(encabezados, fila),
+      nombreOriginal: ''
+    };
   }
-  return { ok: true };
 }
 
 function eliminarCliente_(nombreCliente) {
@@ -229,7 +249,7 @@ function eliminarCliente_(nombreCliente) {
   const filaIdx = buscarFilaCliente_(valores, idxCliente, cliente);
   if (filaIdx === -1) throw new Error('No se encontró el cliente a eliminar');
   hoja.deleteRow(filaIdx + 1);
-  return { ok: true };
+  return { ok: true, clienteEliminado: cliente };
 }
 
 // Guarda las cantidades cargadas (y el Estado) de un cliente puntual.
@@ -336,14 +356,24 @@ function guardarChofer_(payload) {
     hoja.getRange(filaIdx + 1, idxReparto + 1).setValue(repartoNuevo);
     hoja.getRange(filaIdx + 1, idxChofer + 1).setValue(chofer);
     hoja.getRange(filaIdx + 1, idxWhatsapp + 1).setValue(whatsapp);
+    const filaGuardada = hoja.getRange(filaIdx + 1, 1, 1, encabezados.length).getValues()[0];
+    return {
+      ok: true,
+      choferGuardado: objetoSegunEncabezados_(encabezados, filaGuardada),
+      repartoOriginal: repartoOriginal
+    };
   } else {
     if (filaConRepartoNuevo !== -1) throw new Error('Ya existe un chofer cargado para ese Reparto');
     const fila = filaSegunEncabezados_(encabezados, {
       'Reparto': repartoNuevo, 'Chofer': chofer, 'WhatsApp': whatsapp
     });
     hoja.appendRow(fila);
+    return {
+      ok: true,
+      choferGuardado: objetoSegunEncabezados_(encabezados, fila),
+      repartoOriginal: ''
+    };
   }
-  return { ok: true };
 }
 
 function eliminarChofer_(reparto) {
@@ -355,7 +385,7 @@ function eliminarChofer_(reparto) {
   const filaIdx = buscarFilaReparto_(valores, idxReparto, buscado);
   if (filaIdx === -1) throw new Error('No se encontró el chofer a eliminar');
   hoja.deleteRow(filaIdx + 1);
-  return { ok: true };
+  return { ok: true, repartoEliminado: buscado };
 }
 
 // Función de prueba: correla manualmente desde el editor de Apps
