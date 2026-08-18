@@ -1133,13 +1133,13 @@ async function enviarReparto(reparto){
 
   const fecha = new Date();
   const fechaStr = String(fecha.getDate()).padStart(2,'0') + '/' + String(fecha.getMonth()+1).padStart(2,'0') + '/' + String(fecha.getFullYear()).slice(-2);
-  let texto = `Pedidos ${reparto}\n${fechaStr}\n\n`;
+  let texto = `📦 *Pedidos ${reparto} ${fechaStr}*\n\n`;
   clientes.forEach(c => {
     const items = CONFIG.PRODUCTOS
       .filter(p => Number(c[p.codigo]) > 0)
       .map(p => formatearItemProducto(p, Number(c[p.codigo])))
-      .join(', ');
-    texto += `*${c.Cliente}*${c.Localidad ? ' (' + c.Localidad + ')' : ''}\n${items}\n\n`;
+      .join(' | ');
+    texto += `👤 *${c.Cliente}*${c.Localidad ? ' (' + c.Localidad + ')' : ''}\n📞 ${c.Contacto || ''}\n📝 ${items}\n\n`;
   });
 
   const numero = limpiarNumero(repartoInfo.WhatsApp);
