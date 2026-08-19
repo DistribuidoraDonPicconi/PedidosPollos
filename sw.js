@@ -1,7 +1,7 @@
 // Service Worker mínimo: solo lo necesario para que la app sea
-// instalable como PWA. No cachea datos (siempre pide al Apps Script
-// online), así el pedido nunca queda desactualizado.
-const CACHE_NAME = 'pedidos-pollo-v1';
+// instalable como PWA. No cachea datos en vivo (Firestore/Google), así
+// el pedido nunca queda desactualizado.
+const CACHE_NAME = 'pedidos-pollo-v2';
 const ARCHIVOS_CACHE = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -20,10 +20,26 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first: siempre intenta traer la versión online; si no hay
-// conexión, usa lo último que tenga en caché (solo para el shell de la app).
+// Nunca cachear el login de Google ni los datos en vivo de Firestore
+// (siempre tienen que pedirse a la red, para no mostrar pedidos
+// desactualizados). El resto del cascarón usa "red primero, caché de
+// respaldo" para mantenerlo actualizado, y sirve desde caché si falla
+// la red (offline).
 self.addEventListener('fetch', (event) => {
-  if(event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+
+  const esDinamico =
+    url.hostname.includes('accounts.google.com') ||
+    url.hostname.includes('googleusercontent.com') ||
+    url.hostname.includes('gstatic.com') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('firebaseio.com') ||
+    url.hostname.includes('firebaseapp.com');
+
+  if (esDinamico || event.request.method !== 'GET') {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((resp) => {

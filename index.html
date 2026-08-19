@@ -18,6 +18,77 @@
 <!-- Login con Google -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
+<!-- Firebase: Auth (para vincular el login de Google) + Firestore (base de datos) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithCredential, signOut } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+  import {
+    getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch
+  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCcFmq6ZGLtmhlQKpypY1BBo0d7EMeMRfQ",
+    authDomain: "app-pedidos-b96ac.firebaseapp.com",
+    projectId: "app-pedidos-b96ac",
+    storageBucket: "app-pedidos-b96ac.firebasestorage.app",
+    messagingSenderId: "1031734419080",
+    appId: "1:1031734419080:web:3b96162c9e6cfbcc18893d"
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  const firebaseAuth = getAuth(firebaseApp);
+  const db = getFirestore(firebaseApp);
+
+  // Expuestos en window porque el resto del código (fuera de este módulo)
+  // todavía es JS clásico, no un módulo — así lo puede usar sin import.
+  window.firebaseSignOut = () => signOut(firebaseAuth);
+
+  // Toma el id_token que ya devuelve el login de Google (Google Identity
+  // Services) y lo usa para autenticar TAMBIÉN contra Firebase, sin pedir
+  // un segundo login. Así, request.auth en las reglas de Firestore queda
+  // disponible usando el mismo botón de Google que ya tenías.
+  window.firebaseSignInConCredencialGoogle = async (idToken) => {
+    const credential = GoogleAuthProvider.credential(idToken);
+    return signInWithCredential(firebaseAuth, credential);
+  };
+
+  async function leerColeccion(nombre){
+    const snap = await getDocs(collection(db, nombre));
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+  }
+
+  window.firestoreLeerClientes = () => leerColeccion('clientes');
+  window.firestoreLeerChoferes = () => leerColeccion('choferes');
+
+  // setDoc con merge:true → solo pisa los campos que se pasan en "datos",
+  // sin tocar el resto del documento (mismo comportamiento que antes tenía
+  // Código.gs al editar una sola columna del Sheet).
+  window.firestoreGuardarCliente = async (id, datos) => {
+    await setDoc(doc(db, 'clientes', id), datos, { merge: true });
+  };
+  window.firestoreEliminarCliente = async (id) => {
+    await deleteDoc(doc(db, 'clientes', id));
+  };
+  window.firestoreGuardarChofer = async (id, datos) => {
+    await setDoc(doc(db, 'choferes', id), datos, { merge: true });
+  };
+  window.firestoreEliminarChofer = async (id) => {
+    await deleteDoc(doc(db, 'choferes', id));
+  };
+
+  // Actualiza varios documentos de "clientes" a la vez en una sola
+  // operación atómica (se usa para "Vaciar cantidades" y "Marcar enviados").
+  window.firestoreActualizarClientesEnLote = async (actualizaciones) => {
+    const batch = writeBatch(db);
+    actualizaciones.forEach(({ id, datos }) => {
+      batch.set(doc(db, 'clientes', id), datos, { merge: true });
+    });
+    await batch.commit();
+  };
+</script>
+
 <style>
   :root{
     --azul-osc: #16305c;
@@ -414,11 +485,18 @@
 <script>
 /* ============== CONFIGURACIÓN ============== */
 const CONFIG = {
-  // Pegá acá la URL de tu Web App de Apps Script (termina en /exec)
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwksBz4sD1JVt24RnlUD2_wB4cuhtS8ikKenwOHQN5BnznzKUgO-4cXsZ5XtipgsT8O/exec',
-
-  // Mismo Client ID que en Código.gs
+  // Mismo Client ID que antes (login con Google no cambia)
   GOOGLE_CLIENT_ID: '922655936984-eb35rn1hu1855l6b4939qvvl286h7l10.apps.googleusercontent.com',
+
+  // Emails de Google autorizados a entrar a la app. Tiene que coincidir
+  // con la lista de las reglas de seguridad de Firestore (Reglas_Pedidos.txt),
+  // que es la que realmente protege los datos; esta lista es solo para
+  // mostrar el error al toque en vez de esperar a que Firestore lo rechace.
+  EMAILS_AUTORIZADOS: [
+    'nicolaspicconi@gmail.com',
+    'distribuidoradonpicconi@gmail.com',
+    'aldipicconi@gmail.com'
+  ],
 
   // Productos: "codigo" tiene que ser EXACTO al encabezado de la
   // columna en el Sheet. "label" es el texto que ves en la app: podés
@@ -485,6 +563,7 @@ function cerrarSesion(){
   if(window.google && google.accounts && google.accounts.id){
     google.accounts.id.disableAutoSelect();
   }
+  if(window.firebaseSignOut){ window.firebaseSignOut().catch(() => {}); }
   mostrarLogin();
 }
 
@@ -506,12 +585,31 @@ function ocultarLogin(){
   document.getElementById('app').style.display = '';
 }
 
+// Autentica contra Firebase con el mismo id_token de Google (sin pedir un
+// segundo login), y recién ahí entra a la app: sin esto, Firestore rechaza
+// todas las lecturas/escrituras porque request.auth queda vacío.
+function autenticarFirebaseYEntrar(token){
+  if(!window.firebaseSignInConCredencialGoogle){ ocultarLogin(); cargarDatos(); return; }
+  window.firebaseSignInConCredencialGoogle(token).then(() => {
+    ocultarLogin();
+    cargarDatos();
+  }).catch((err) => {
+    cerrarSesion();
+    loginError.textContent = 'No se pudo autenticar con Firebase. ' + (err && err.message ? err.message : '');
+  });
+}
+
 function manejarCredencial(response){
   const payload = decodeJwt_(response.credential);
   if(!payload){ loginError.textContent = 'No se pudo leer la respuesta de Google.'; return; }
+  const email = String(payload.email || '').trim().toLowerCase();
+  const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
+  if(autorizados.indexOf(email) === -1){
+    loginError.textContent = 'Tu cuenta (' + email + ') no tiene acceso a esta app.';
+    return;
+  }
   guardarSesion(response.credential, payload);
-  ocultarLogin();
-  cargarDatos();
+  autenticarFirebaseYEntrar(response.credential);
 }
 
 function iniciarLogin(){
@@ -523,25 +621,11 @@ function iniciarLogin(){
   google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
 
   const sesion = sesionGuardada();
-  if(sesion){ ocultarLogin(); cargarDatos(); } else { mostrarLogin(); }
+  if(sesion){ autenticarFirebaseYEntrar(sesion.token); } else { mostrarLogin(); }
 }
 
 btnLogout.addEventListener('click', () => { if(confirm('¿Cerrar sesión?')) cerrarSesion(); });
 /* ================================================ */
-
-async function postAppsScript(payload){
-  const token = tokenActual();
-  if(!token){ cerrarSesion(); throw new Error('Sesión vencida. Iniciá sesión de nuevo.'); }
-  const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify(Object.assign({}, payload, { token }))
-  });
-  const data = await resp.json();
-  if(data && data.error && /no autenticado|sesión inválida|no tiene acceso|no autorizado/i.test(data.error)){
-    cerrarSesion();
-  }
-  return data;
-}
 
 let pedidos = [];
 let repartos = [];
@@ -560,25 +644,20 @@ const fabNuevo = document.getElementById('fab-nuevo');
 async function cargarDatos(){
   btnRefresh.classList.add('spinning');
   try{
-    const token = tokenActual();
-    if(!token){ cerrarSesion(); return; }
-    const url = CONFIG.APPS_SCRIPT_URL + '?token=' + encodeURIComponent(token);
-    const resp = await fetch(url, { cache:'no-store' });
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    if(data && data.error){
-      if(/no autenticado|sesión inválida|no tiene acceso|no autorizado/i.test(data.error)){
-        cerrarSesion(); loginError.textContent = data.error; return;
-      }
-      pedidos = []; repartos = [];
-      mainEl.innerHTML = `<div class="state-msg error">No se pudieron cargar los datos: ${data.error}</div>`;
-      return;
-    }
-    pedidos = data.pedidos || [];
-    repartos = data.repartos || [];
+    const [clientesDocs, choferesDocs] = await Promise.all([
+      window.firestoreLeerClientes(),
+      window.firestoreLeerChoferes()
+    ]);
+    pedidos = clientesDocs;
+    repartos = choferesDocs;
     render();
   }catch(err){
-    mainEl.innerHTML = `<div class="state-msg error">No se pudo cargar el Google Sheet.<br>${err.message}<br><br>Revisá que CONFIG.APPS_SCRIPT_URL esté bien configurada.</div>`;
+    if(err && err.code === 'permission-denied'){
+      cerrarSesion();
+      loginError.textContent = 'Esta cuenta no tiene acceso a los datos, o la sesión venció. Iniciá sesión de nuevo.';
+      return;
+    }
+    mainEl.innerHTML = `<div class="state-msg error">No se pudieron cargar los datos.<br>${err.message}</div>`;
   }finally{
     btnRefresh.classList.remove('spinning');
   }
@@ -848,6 +927,8 @@ document.getElementById('cant-cancelar').addEventListener('click', () => cantMod
 
 document.getElementById('cant-guardar').addEventListener('click', async () => {
   const cliente = cantClienteId.value;
+  const c = pedidos.find(p => p.Cliente === cliente);
+  if(!c){ cantError.textContent = 'No se encontró el cliente'; return; }
   const cantidades = {};
   cantGrid.querySelectorAll('input').forEach(inp => {
     const v = inp.value.trim();
@@ -856,13 +937,13 @@ document.getElementById('cant-guardar').addEventListener('click', async () => {
   const btn = document.getElementById('cant-guardar');
   btn.disabled = true; btn.textContent = 'Guardando...';
   try{
-    const data = await postAppsScript({ accion:'guardarCantidades', cliente, cantidades, estado: cantEstadoValor.value });
-    if(data.error){ cantError.textContent = data.error; return; }
-    const c = pedidos.find(p => p.Cliente === cliente);
-    if(c){ Object.assign(c, cantidades); c.Estado = cantEstadoValor.value; }
+    const datos = Object.assign({}, cantidades, { Estado: cantEstadoValor.value });
+    await window.firestoreGuardarCliente(c.id, datos);
+    Object.assign(c, cantidades); c.Estado = cantEstadoValor.value;
     cantModal.classList.add('hidden');
     render();
   }catch(err){
+    if(err && err.code === 'permission-denied'){ cantError.textContent = 'Tu cuenta no tiene permiso para hacer esto.'; return; }
     cantError.textContent = 'Error al guardar: ' + err.message;
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
@@ -927,23 +1008,29 @@ document.getElementById('nc-cerrar').addEventListener('click', () => clienteModa
 async function guardarCliente(){
   const cliente = ncNombre.value.trim();
   if(!cliente){ ncError.textContent = 'Falta el nombre del cliente'; return; }
-  const payload = {
-    accion: 'guardarCliente',
-    cliente,
-    reparto: ncReparto.value.trim(),
-    localidad: ncLocalidad.value.trim(),
-    contacto: ncContacto.value.trim(),
-    nombreOriginal: ncNombreOriginal.value
+  const nombreOriginal = ncNombreOriginal.value;
+  const existente = nombreOriginal ? pedidos.find(p => p.Cliente === nombreOriginal) : null;
+  if(nombreOriginal && !existente){ ncError.textContent = 'No se encontró el cliente a editar'; return; }
+  const duplicado = pedidos.find(p => p !== existente && String(p.Cliente||'').trim().toLowerCase() === cliente.toLowerCase());
+  if(duplicado){ ncError.textContent = 'Ya existe otro cliente con ese nombre'; return; }
+
+  const datos = {
+    Cliente: cliente,
+    Reparto: ncReparto.value.trim(),
+    Localidad: ncLocalidad.value.trim(),
+    Contacto: ncContacto.value.trim()
   };
+  const id = existente ? existente.id : crypto.randomUUID().split('-')[0];
+
   const btn = document.getElementById('nc-guardar');
   btn.disabled = true; btn.textContent = 'Guardando...';
   try{
-    const data = await postAppsScript(payload);
-    if(data.error){ ncError.textContent = data.error; return; }
-    aplicarClienteGuardado(data.clienteGuardado, data.nombreOriginal);
+    await window.firestoreGuardarCliente(id, datos);
+    aplicarClienteGuardado(Object.assign({}, existente, datos, { id }), nombreOriginal);
     clienteModal.classList.add('hidden');
     render();
   }catch(err){
+    if(err && err.code === 'permission-denied'){ ncError.textContent = 'Tu cuenta no tiene permiso para hacer esto.'; return; }
     ncError.textContent = 'Error al guardar: ' + err.message;
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
@@ -1015,22 +1102,28 @@ async function guardarChofer(){
   const reparto = chReparto.value.trim();
   if(!reparto){ chError.textContent = 'Falta el Reparto'; return; }
   if(!chWhatsapp.value.trim()){ chError.textContent = 'Falta el WhatsApp del chofer'; return; }
-  const payload = {
-    accion: 'guardarChofer',
-    reparto,
-    chofer: chChofer.value.trim(),
-    whatsapp: chWhatsapp.value.trim(),
-    repartoOriginal: chRepartoOriginal.value
+  const repartoOriginal = chRepartoOriginal.value;
+  const existente = repartoOriginal ? repartos.find(r => String(r.Reparto) === String(repartoOriginal)) : null;
+  if(repartoOriginal && !existente){ chError.textContent = 'No se encontró el reparto a editar'; return; }
+  const duplicado = repartos.find(r => r !== existente && String(r.Reparto||'').trim().toLowerCase() === reparto.toLowerCase());
+  if(duplicado){ chError.textContent = 'Ya existe otro chofer cargado con ese Reparto'; return; }
+
+  const datos = {
+    Reparto: reparto,
+    Chofer: chChofer.value.trim(),
+    WhatsApp: chWhatsapp.value.trim()
   };
+  const id = existente ? existente.id : crypto.randomUUID().split('-')[0];
+
   const btn = document.getElementById('ch-guardar');
   btn.disabled = true; btn.textContent = 'Guardando...';
   try{
-    const data = await postAppsScript(payload);
-    if(data.error){ chError.textContent = data.error; return; }
-    aplicarChoferGuardado(data.choferGuardado, data.repartoOriginal);
+    await window.firestoreGuardarChofer(id, datos);
+    aplicarChoferGuardado(Object.assign({}, existente, datos, { id }), repartoOriginal);
     choferModal.classList.add('hidden');
     render();
   }catch(err){
+    if(err && err.code === 'permission-denied'){ chError.textContent = 'Tu cuenta no tiene permiso para hacer esto.'; return; }
     chError.textContent = 'Error al guardar: ' + err.message;
   }finally{
     btn.disabled = false; btn.textContent = 'Guardar';
@@ -1054,13 +1147,16 @@ function pedirConfirmacionEliminarChofer(reparto){
   confirmTexto.textContent = `Se elimina el chofer de "${reparto}". Los clientes de ese reparto no se tocan, pero no se va a poder enviar el pedido hasta cargar otro chofer. No se puede deshacer.`;
   accionConfirmada = async () => {
     try{
-      const data = await postAppsScript({ accion:'eliminarChofer', reparto });
-      if(data.error){ alert(data.error); return; }
-      const eliminado = String(data.repartoEliminado || reparto);
-      repartos = repartos.filter(r => String(r.Reparto) !== eliminado);
+      const r = repartos.find(x => String(x.Reparto) === String(reparto));
+      if(!r){ alert('No se encontró el chofer a eliminar'); return; }
+      await window.firestoreEliminarChofer(r.id);
+      repartos = repartos.filter(x => x.id !== r.id);
       choferModal.classList.add('hidden');
       render();
-    }catch(err){ alert('Error al eliminar: ' + err.message); }
+    }catch(err){
+      if(err && err.code === 'permission-denied'){ alert('Tu cuenta no tiene permiso para hacer esto.'); return; }
+      alert('Error al eliminar: ' + err.message);
+    }
   };
   confirmModal.classList.remove('hidden');
 }
@@ -1082,13 +1178,16 @@ function pedirConfirmacionEliminarCliente(nombreCliente){
   confirmTexto.textContent = `Se elimina a "${nombreCliente}" junto con lo que tenga cargado en este pedido. No se puede deshacer.`;
   accionConfirmada = async () => {
     try{
-      const data = await postAppsScript({ accion:'eliminarCliente', cliente: nombreCliente });
-      if(data.error){ alert(data.error); return; }
-      const eliminado = String(data.clienteEliminado || nombreCliente);
-      pedidos = pedidos.filter(p => p.Cliente !== eliminado);
+      const c = pedidos.find(p => p.Cliente === nombreCliente);
+      if(!c){ alert('No se encontró el cliente a eliminar'); return; }
+      await window.firestoreEliminarCliente(c.id);
+      pedidos = pedidos.filter(p => p.id !== c.id);
       clienteModal.classList.add('hidden');
       render();
-    }catch(err){ alert('Error al eliminar: ' + err.message); }
+    }catch(err){
+      if(err && err.code === 'permission-denied'){ alert('Tu cuenta no tiene permiso para hacer esto.'); return; }
+      alert('Error al eliminar: ' + err.message);
+    }
   };
   confirmModal.classList.remove('hidden');
 }
@@ -1098,14 +1197,20 @@ document.getElementById('btn-vaciar').addEventListener('click', () => {
   confirmTexto.textContent = 'Se borran las cantidades cargadas de TODOS los clientes para empezar un pedido nuevo. La lista de clientes no se toca. No se puede deshacer.';
   accionConfirmada = async () => {
     try{
-      const data = await postAppsScript({ accion:'vaciarCantidades' });
-      if(data.error){ alert(data.error); return; }
+      const vacio = {};
+      CONFIG.PRODUCTOS.forEach(prod => { vacio[prod.codigo] = ''; });
+      vacio.Estado = '';
+      const actualizaciones = pedidos.map(p => ({ id: p.id, datos: vacio }));
+      if(actualizaciones.length) await window.firestoreActualizarClientesEnLote(actualizaciones);
       pedidos.forEach(p => {
         CONFIG.PRODUCTOS.forEach(prod => { p[prod.codigo] = ''; });
         p.Estado = '';
       });
       render();
-    }catch(err){ alert('Error al vaciar: ' + err.message); }
+    }catch(err){
+      if(err && err.code === 'permission-denied'){ alert('Tu cuenta no tiene permiso para hacer esto.'); return; }
+      alert('Error al vaciar: ' + err.message);
+    }
   };
   confirmModal.classList.remove('hidden');
 });
@@ -1118,7 +1223,7 @@ function limpiarNumero(n){
 async function enviarReparto(reparto){
   const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
   if(!repartoInfo || !repartoInfo.WhatsApp){
-    alert('Falta cargar el WhatsApp del chofer para este reparto en la hoja "Repartos".');
+    alert('Falta cargar el WhatsApp del chofer para este reparto en la pestaña "Choferes".');
     return;
   }
   const clientes = pedidos.filter(c =>
@@ -1147,7 +1252,8 @@ async function enviarReparto(reparto){
   window.open(url, '_blank');
 
   try{
-    await postAppsScript({ accion:'marcarEnviados', clientes: clientes.map(c => c.Cliente) });
+    const actualizaciones = clientes.map(c => ({ id: c.id, datos: { Estado: 'Enviado' } }));
+    await window.firestoreActualizarClientesEnLote(actualizaciones);
     clientes.forEach(c => { c.Estado = 'Enviado'; });
     render();
   }catch(err){
