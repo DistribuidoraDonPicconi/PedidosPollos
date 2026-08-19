@@ -621,7 +621,19 @@ function iniciarLogin(){
   google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
 
   const sesion = sesionGuardada();
-  if(sesion){ autenticarFirebaseYEntrar(sesion.token); } else { mostrarLogin(); }
+  if(sesion){
+    // Mismo corte inmediato que en manejarCredencial: si el email guardado
+    // ya no está en la lista (por ejemplo, se lo dio de baja), no lo
+    // dejamos entrar con la sesión vieja.
+    const emailSesion = String(sesion.email || '').trim().toLowerCase();
+    const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
+    if(autorizados.indexOf(emailSesion) === -1){
+      cerrarSesion();
+      loginError.textContent = 'Tu cuenta (' + emailSesion + ') no tiene acceso a esta app.';
+      return;
+    }
+    autenticarFirebaseYEntrar(sesion.token);
+  } else { mostrarLogin(); }
 }
 
 btnLogout.addEventListener('click', () => { if(confirm('¿Cerrar sesión?')) cerrarSesion(); });
