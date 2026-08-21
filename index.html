@@ -138,6 +138,8 @@
   .icon-btn svg{ width:18px; height:18px; }
   .icon-btn.spinning svg{ animation: spin 0.8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
+  .icon-btn.active{ background:var(--azul); color:#fff; border-color:var(--azul); }
+  .icon-btn.hidden{ display:none; }
   .header-actions{ display:flex; gap:8px; }
 
   .pill-tabs{
@@ -450,6 +452,9 @@
         <button class="icon-btn" id="btn-refresh" aria-label="Actualizar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
+        <button class="icon-btn" id="btn-ocultar-vacios" aria-label="Ocultar clientes vacíos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
         <button class="icon-btn" id="btn-logout" aria-label="Cerrar sesión">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
@@ -645,11 +650,13 @@ let currentTab = 'pedido';
 let gruposColapsados = new Set();
 let gruposColapsadosClientes = new Set();
 let filtro = '';
+let ocultarVacios = false;
 
 const mainEl = document.getElementById('main');
 const searchEl = document.getElementById('search');
 const searchWrapEl = document.querySelector('.search-wrap');
 const btnRefresh = document.getElementById('btn-refresh');
+const btnOcultarVacios = document.getElementById('btn-ocultar-vacios');
 const barraAcciones = document.getElementById('barra-acciones');
 const fabNuevo = document.getElementById('fab-nuevo');
 
@@ -707,6 +714,8 @@ function render(){
 
   barraAcciones.classList.toggle('hidden', currentTab !== 'pedido');
   fabNuevo.classList.toggle('hidden', currentTab === 'pedido');
+  btnOcultarVacios.classList.toggle('hidden', currentTab !== 'pedido');
+  btnOcultarVacios.classList.toggle('active', ocultarVacios);
 
   if(currentTab === 'pedido') renderPedido(filtrados);
   else if(currentTab === 'clientes') renderClientes(filtrados);
@@ -718,27 +727,36 @@ function renderPedido(lista){
     mainEl.innerHTML = `<div class="state-msg">No hay clientes cargados todavía. Andá a la pestaña "Clientes" para agregar el primero.</div>`;
     return;
   }
-  // Agrupar por reparto, preservando orden de aparición
+  // Agrupar por reparto
   const grupos = new Map();
   lista.forEach(c => {
     const key = String(c.Reparto || '').trim() || 'Sin reparto';
     if(!grupos.has(key)) grupos.set(key, []);
     grupos.get(key).push(c);
   });
+  // Orden alfabético de las categorías de Reparto
+  const repartosOrdenados = Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b, 'es'));
 
   let html = '';
-  grupos.forEach((clientes, reparto) => {
+  let huboGrupos = false;
+  repartosOrdenados.forEach(reparto => {
+    const clientes = grupos.get(reparto);
     const conCantidad = clientes.filter(tieneCantidades);
     const pendientes = conCantidad.filter(c => String(c.Estado || '').toLowerCase() !== 'enviado');
     const repartoInfo = repartos.find(r => String(r.Reparto||'').trim() === reparto);
     const puedeEnviar = pendientes.length > 0 && repartoInfo && repartoInfo.WhatsApp;
     const colapsado = gruposColapsados.has(reparto);
 
+    // Si está activo "ocultar vacíos", sacamos los clientes sin cantidades cargadas (badge "Vacío")
+    const clientesVisibles = ocultarVacios ? clientes.filter(c => tieneCantidades(c) || String(c.Estado||'').toLowerCase() === 'enviado') : clientes;
+    if(!clientesVisibles.length) return;
+    huboGrupos = true;
+
     html += `<div class="grupo">
       <div class="grupo-header">
         <button type="button" class="grupo-titulo-btn ${colapsado ? 'colapsado' : ''}" data-reparto="${escapeHtml(reparto)}">
           <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          <span class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientes.length}</span></span>
+          <span class="grupo-titulo">${escapeHtml(reparto)}<span class="cant">${clientesVisibles.length}</span></span>
         </button>
         <button class="btn-enviar-reparto ${puedeEnviar ? '' : 'deshabilitado'}" data-reparto="${escapeHtml(reparto)}" ${puedeEnviar ? '' : 'disabled'}>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.868-2.03-.967-.273-.099-.472-.148-.67.15-.198.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.99.583 3.845 1.588 5.405L2 22l4.735-1.552A9.947 9.947 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>
@@ -746,7 +764,7 @@ function renderPedido(lista){
         </button>
       </div>
       <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
-    clientes.forEach(c => {
+    clientesVisibles.forEach(c => {
       const cargado = tieneCantidades(c);
       const enviado = String(c.Estado || '').toLowerCase() === 'enviado';
       let badge = '<span class="cliente-badge vacio">Vacío</span>';
@@ -762,6 +780,11 @@ function renderPedido(lista){
     });
     html += `</div></div>`;
   });
+
+  if(!huboGrupos){
+    mainEl.innerHTML = `<div class="state-msg">No hay clientes pendientes (todos están vacíos). Desactivá el filtro para verlos.</div>`;
+    return;
+  }
 
   mainEl.innerHTML = html;
 
@@ -786,16 +809,19 @@ function renderClientes(lista){
     mainEl.innerHTML = `<div class="state-msg">No hay clientes cargados. Tocá el botón + para agregar el primero.</div>`;
     return;
   }
-  // Agrupar por reparto, preservando orden de aparición
+  // Agrupar por reparto
   const grupos = new Map();
   lista.forEach(c => {
     const key = String(c.Reparto || '').trim() || 'Sin reparto';
     if(!grupos.has(key)) grupos.set(key, []);
     grupos.get(key).push(c);
   });
+  // Orden alfabético de las categorías de Reparto
+  const repartosOrdenados = Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b, 'es'));
 
   let html = '';
-  grupos.forEach((clientes, reparto) => {
+  repartosOrdenados.forEach(reparto => {
+    const clientes = grupos.get(reparto);
     const colapsado = gruposColapsadosClientes.has(reparto);
 
     html += `<div class="grupo">
@@ -838,8 +864,10 @@ function renderChoferes(){
     mainEl.innerHTML = `<div class="state-msg">No hay choferes cargados. Tocá el botón + para agregar el primero.</div>`;
     return;
   }
+  const repartosOrdenados = [...repartos].sort((a, b) => String(a.Reparto||'').localeCompare(String(b.Reparto||''), 'es'));
+
   let html = '';
-  repartos.forEach(r => {
+  repartosOrdenados.forEach(r => {
     html += `<div class="cliente-card" data-reparto="${escapeHtml(r.Reparto)}">
       <div class="cliente-info">
         <div class="cliente-nombre">${escapeHtml(r.Reparto)}</div>
@@ -865,6 +893,7 @@ document.querySelectorAll('.pill-tabs button').forEach(btn => {
 });
 searchEl.addEventListener('input', () => { filtro = searchEl.value; render(); });
 btnRefresh.addEventListener('click', cargarDatos);
+btnOcultarVacios.addEventListener('click', () => { ocultarVacios = !ocultarVacios; render(); });
 
 /* ============== Modal cantidades ============== */
 const cantModal = document.getElementById('cant-modal');
