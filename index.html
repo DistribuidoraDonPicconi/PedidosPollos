@@ -629,6 +629,24 @@ function manejarCredencial(response){
 }
 
 function iniciarLogin(){
+  // El chequeo de la sesión guardada no depende de Google: se hace ya,
+  // sin esperar a que cargue accounts.google.com/gsi/client por red. Antes
+  // esperaba a ese script incluso con sesión válida, y eso hacía que la
+  // pantalla de login (visible por defecto mientras tanto) quedara un
+  // rato de más antes de entrar a la tabla.
+  const sesion = sesionGuardada();
+  if(sesion){
+    const emailSesion = String(sesion.email || '').trim().toLowerCase();
+    const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
+    if(autorizados.indexOf(emailSesion) === -1){
+      cerrarSesion();
+      loginError.textContent = 'Tu cuenta (' + emailSesion + ') no tiene acceso a esta app.';
+      return;
+    }
+    autenticarFirebaseYEntrar(sesion.token);
+    return;
+  }
+
   if(!window.google || !google.accounts || !google.accounts.id){
     setTimeout(iniciarLogin, 300);
     return;
@@ -644,28 +662,13 @@ function iniciarLogin(){
   });
   google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
 
-  const sesion = sesionGuardada();
-  if(sesion){
-    // Mismo corte inmediato que en manejarCredencial: si el email guardado
-    // ya no está en la lista (por ejemplo, se lo dio de baja), no lo
-    // dejamos entrar con la sesión vieja.
-    const emailSesion = String(sesion.email || '').trim().toLowerCase();
-    const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
-    if(autorizados.indexOf(emailSesion) === -1){
-      cerrarSesion();
-      loginError.textContent = 'Tu cuenta (' + emailSesion + ') no tiene acceso a esta app.';
-      return;
-    }
-    autenticarFirebaseYEntrar(sesion.token);
-  } else {
-    mostrarLogin();
-    // One Tap: intenta el login automático (silencioso) con la última
-    // cuenta usada. Si el navegador no tiene una cuenta para ofrecer, o
-    // el usuario ya lo cerró antes, simplemente no aparece nada y queda
-    // el botón de abajo como alternativa manual (esa sí deja elegir
-    // "usar otra cuenta").
-    google.accounts.id.prompt();
-  }
+  mostrarLogin();
+  // One Tap: intenta el login automático (silencioso) con la última
+  // cuenta usada. Si el navegador no tiene una cuenta para ofrecer, o
+  // el usuario ya lo cerró antes, simplemente no aparece nada y queda
+  // el botón de abajo como alternativa manual (esa sí deja elegir
+  // "usar otra cuenta").
+  google.accounts.id.prompt();
 }
 
 btnLogout.addEventListener('click', () => {
