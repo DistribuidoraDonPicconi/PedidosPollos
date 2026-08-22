@@ -566,9 +566,15 @@ function guardarSesion(token, payload){
   localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ token, email: payload.email, exp: payload.exp }));
 }
 
-function cerrarSesion(){
+function cerrarSesion(desactivarAutoSelect){
   localStorage.removeItem(LOGIN_STORAGE_KEY);
-  if(window.google && google.accounts && google.accounts.id){
+  // Solo cortamos el auto-login de Chrome cuando el usuario decide
+  // explícitamente cerrar sesión (por ejemplo, para pasarle el
+  // dispositivo a otro chofer). Si lo hacemos también en los cierres
+  // automáticos (token vencido, cuenta dada de baja), Chrome nunca llega
+  // a "confiar" en el login silencioso y siempre vuelve a pedir elegir
+  // cuenta completo en vez de la burbuja de un solo toque.
+  if(desactivarAutoSelect && window.google && google.accounts && google.accounts.id){
     google.accounts.id.disableAutoSelect();
   }
   if(window.firebaseSignOut){ window.firebaseSignOut().catch(() => {}); }
@@ -662,7 +668,12 @@ function iniciarLogin(){
   }
 }
 
-btnLogout.addEventListener('click', () => { if(confirm('¿Cerrar sesión?')) cerrarSesion(); });
+btnLogout.addEventListener('click', () => {
+  confirmTitulo.textContent = 'Cerrar sesión';
+  confirmTexto.textContent = '¿Seguro que querés cerrar sesión?';
+  accionConfirmada = () => cerrarSesion(true);
+  confirmModal.classList.remove('hidden');
+});
 /* ================================================ */
 
 let pedidos = [];
