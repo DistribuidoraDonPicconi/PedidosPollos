@@ -336,6 +336,7 @@
   #login-screen .sub{ font-size:14px; color:var(--azul); font-weight:700; margin-bottom:32px; }
   #login-screen .login-error{ color:var(--rojo); font-size:13.5px; font-weight:600; margin-top:18px; max-width:300px; min-height:18px; }
   #login-screen .login-checking{ color:var(--texto-tenue); font-size:14px; }
+  #login-screen .login-hint{ color:var(--texto-tenue); font-size:13px; margin-top:12px; max-width:260px; }
   #google-btn-container{ min-height:44px; }
 </style>
 </head>
@@ -346,6 +347,7 @@
   <div class="sub">Reparto de pollo</div>
   <div id="login-checking" class="login-checking">Verificando sesión...</div>
   <div id="google-btn-container" style="display:none;"></div>
+  <div class="login-hint" id="login-hint" style="display:none;">¿No sos vos? Tocá el botón para usar otra cuenta.</div>
   <div class="login-error" id="login-error"></div>
 </div>
 
@@ -536,6 +538,7 @@ const loginScreen = document.getElementById('login-screen');
 const loginChecking = document.getElementById('login-checking');
 const googleBtnContainer = document.getElementById('google-btn-container');
 const loginError = document.getElementById('login-error');
+const loginHint = document.getElementById('login-hint');
 const btnLogout = document.getElementById('btn-logout');
 
 function decodeJwt_(token){
@@ -582,11 +585,13 @@ function mostrarLogin(){
   loginScreen.classList.remove('hidden');
   loginChecking.style.display = 'none';
   googleBtnContainer.style.display = 'block';
+  loginHint.style.display = 'block';
   loginError.textContent = '';
 }
 
 function ocultarLogin(){
   loginScreen.classList.add('hidden');
+  loginHint.style.display = 'none';
   document.getElementById('app').style.display = '';
 }
 
@@ -622,7 +627,15 @@ function iniciarLogin(){
     setTimeout(iniciarLogin, 300);
     return;
   }
-  google.accounts.id.initialize({ client_id: CONFIG.GOOGLE_CLIENT_ID, callback: manejarCredencial });
+  // auto_select: si el navegador tiene una sola cuenta de Google ya usada
+  // antes en esta app, google.accounts.id.prompt() de más abajo entra
+  // directo, sin mostrar ningún selector ni pedir un click.
+  google.accounts.id.initialize({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    callback: manejarCredencial,
+    auto_select: true,
+    itp_support: true
+  });
   google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
 
   const sesion = sesionGuardada();
@@ -638,7 +651,15 @@ function iniciarLogin(){
       return;
     }
     autenticarFirebaseYEntrar(sesion.token);
-  } else { mostrarLogin(); }
+  } else {
+    mostrarLogin();
+    // One Tap: intenta el login automático (silencioso) con la última
+    // cuenta usada. Si el navegador no tiene una cuenta para ofrecer, o
+    // el usuario ya lo cerró antes, simplemente no aparece nada y queda
+    // el botón de abajo como alternativa manual (esa sí deja elegir
+    // "usar otra cuenta").
+    google.accounts.id.prompt();
+  }
 }
 
 btnLogout.addEventListener('click', () => { if(confirm('¿Cerrar sesión?')) cerrarSesion(); });
