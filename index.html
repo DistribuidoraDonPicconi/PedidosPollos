@@ -1289,7 +1289,7 @@ async function enviarReparto(reparto){
   });
 
   const numero = limpiarNumero(repartoInfo.WhatsApp);
-  const url = `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+  const url = `https://api.whatsapp.com/send?phone=${numero}&text=${encodeURIComponent(texto)}`;
   window.open(url, '_blank');
 
   try{
