@@ -187,6 +187,8 @@
   .grupo-titulo{ font-size:13px; font-weight:800; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.4px; }
   .grupo-titulo .cant{ color:#b7c0d4; font-weight:700; margin-left:4px; }
   .grupo-clientes.colapsado{ display:none; }
+  .localidad-sub-titulo{ font-size:11.5px; font-weight:700; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.3px; padding:10px 4px 4px; }
+  .localidad-sub-titulo:first-child{ padding-top:4px; }
   .btn-enviar-reparto{
     display:flex; align-items:center; gap:6px;
     background:#e9f9ef; color:#178a48; border:1px solid #c7ecd4;
@@ -740,6 +742,30 @@ function tieneCantidades(cliente){
   return CONFIG.PRODUCTOS.some(p => Number(cliente[p.codigo]) > 0);
 }
 
+/* ============== Orden de localidades por reparto ============== */
+// Prioridad de localidades dentro de cada reparto (para el listado en pantalla y el mensaje de WhatsApp).
+// Las localidades que no figuren en la lista de su reparto van al final.
+const ORDEN_LOCALIDADES_POR_REPARTO = {
+  'Reparto 1': ['El Pingo', 'María Grande', 'Sosa', 'Tabossi'],
+  'Reparto 2': ['Alcaraz', 'Bovril', 'Sauce de Luna', 'Bernardi', 'Federal']
+};
+
+function ordenLocalidad(reparto, localidad){
+  const lista = ORDEN_LOCALIDADES_POR_REPARTO[reparto] || [];
+  const norm = String(localidad || '').trim().toLowerCase();
+  const idx = lista.findIndex(l => l.toLowerCase() === norm);
+  return idx === -1 ? lista.length : idx;
+}
+
+function compararPorLocalidadYNombre(reparto){
+  return (a, b) => {
+    const oa = ordenLocalidad(reparto, a.Localidad);
+    const ob = ordenLocalidad(reparto, b.Localidad);
+    if(oa !== ob) return oa - ob;
+    return String(a.Cliente || '').localeCompare(String(b.Cliente || ''), 'es');
+  };
+}
+
 /* ============== RENDER ============== */
 function render(){
   const term = filtro.trim().toLowerCase();
@@ -785,6 +811,7 @@ function renderPedido(lista){
     // Si está activo "ocultar vacíos", sacamos los clientes sin cantidades cargadas (badge "Vacío")
     const clientesVisibles = ocultarVacios ? clientes.filter(c => tieneCantidades(c) || String(c.Estado||'').toLowerCase() === 'enviado') : clientes;
     if(!clientesVisibles.length) return;
+    clientesVisibles.sort(compararPorLocalidadYNombre(reparto));
     huboGrupos = true;
 
     html += `<div class="grupo">
@@ -799,7 +826,13 @@ function renderPedido(lista){
         </button>
       </div>
       <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
+    let localidadAnterior = null;
     clientesVisibles.forEach(c => {
+      const localidadActual = c.Localidad || 'Sin localidad';
+      if(localidadActual !== localidadAnterior){
+        html += `<div class="localidad-sub-titulo">${escapeHtml(localidadActual)}</div>`;
+        localidadAnterior = localidadActual;
+      }
       const cargado = tieneCantidades(c);
       const enviado = String(c.Estado || '').toLowerCase() === 'enviado';
       let badge = '<span class="cliente-badge vacio">Vacío</span>';
@@ -808,7 +841,6 @@ function renderPedido(lista){
       html += `<div class="cliente-card ${cargado ? 'cargado' : ''}" data-cliente="${escapeHtml(c.Cliente)}">
         <div class="cliente-info">
           <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
-          <div class="cliente-sub">${escapeHtml(c.Localidad || 'Sin localidad')}</div>
         </div>
         ${badge}
       </div>`;
@@ -857,6 +889,7 @@ function renderClientes(lista){
   let html = '';
   repartosOrdenados.forEach(reparto => {
     const clientes = grupos.get(reparto);
+    clientes.sort(compararPorLocalidadYNombre(reparto));
     const colapsado = gruposColapsadosClientes.has(reparto);
 
     html += `<div class="grupo">
@@ -867,11 +900,16 @@ function renderClientes(lista){
         </button>
       </div>
       <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
+    let localidadAnterior = null;
     clientes.forEach(c => {
+      const localidadActual = c.Localidad || 'Sin localidad';
+      if(localidadActual !== localidadAnterior){
+        html += `<div class="localidad-sub-titulo">${escapeHtml(localidadActual)}</div>`;
+        localidadAnterior = localidadActual;
+      }
       html += `<div class="cliente-card" data-cliente="${escapeHtml(c.Cliente)}">
         <div class="cliente-info">
           <div class="cliente-nombre">${escapeHtml(c.Cliente)}</div>
-          <div class="cliente-sub">${escapeHtml(c.Localidad || 'Sin localidad')}</div>
         </div>
         <span class="cliente-badge vacio">Editar</span>
       </div>`;
@@ -1307,6 +1345,7 @@ async function enviarReparto(reparto){
     && tieneCantidades(c)
     && String(c.Estado || '').toLowerCase() !== 'enviado'
   );
+  clientes.sort(compararPorLocalidadYNombre(reparto));
   if(!clientes.length){
     alert('No hay pedidos nuevos para enviar en este reparto (ya están todos marcados como Enviado).');
     return;
