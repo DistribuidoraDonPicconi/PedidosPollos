@@ -15,6 +15,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pedidos">
 
+<!-- Promesa que indica cuándo terminó de cargarse el módulo de Firebase de abajo.
+     Se crea acá (script clásico, se ejecuta de inmediato) para que esté disponible
+     apenas arranca la página, sin depender de que el módulo ya haya llegado. -->
+<script>
+  window._firebaseListo = new Promise(resolve => { window._resolverFirebaseListo = resolve; });
+</script>
+
 <!-- Login con Google -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -87,6 +94,10 @@
     });
     await batch.commit();
   };
+
+  // Recién acá terminaron de quedar definidas todas las funciones window.firestoreXxx
+  // de arriba: avisamos al resto del código (que es JS clásico) que ya puede usarlas.
+  window._resolverFirebaseListo();
 </script>
 
 <style>
@@ -187,8 +198,11 @@
   .grupo-titulo{ font-size:13px; font-weight:800; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.4px; }
   .grupo-titulo .cant{ color:#b7c0d4; font-weight:700; margin-left:4px; }
   .grupo-clientes.colapsado{ display:none; }
-  .localidad-sub-titulo{ font-size:11.5px; font-weight:700; color:var(--texto-tenue); text-transform:uppercase; letter-spacing:0.3px; padding:10px 4px 4px; }
-  .localidad-sub-titulo:first-child{ padding-top:4px; }
+  .localidad-sub-titulo{
+    font-size:11px; font-weight:800; color:var(--azul); text-transform:uppercase; letter-spacing:0.5px;
+    padding:14px 4px 6px; margin-bottom:2px; border-bottom:1px solid var(--azul-borde);
+  }
+  .localidad-sub-titulo:first-child{ padding-top:2px; }
   .btn-enviar-reparto{
     display:flex; align-items:center; gap:6px;
     background:#e9f9ef; color:#178a48; border:1px solid #c7ecd4;
@@ -209,7 +223,7 @@
   .cliente-card:active{ background:var(--azul-suave); }
   .cliente-card.cargado{ border-color:var(--azul-borde); background:var(--azul-suave); }
   .cliente-info{ min-width:0; }
-  .cliente-nombre{ font-size:15.5px; font-weight:700; color:#1a1f2b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cliente-nombre{ font-size:15.5px; font-weight:600; color:#1a1f2b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cliente-sub{ font-size:12.5px; color:var(--texto-tenue); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cliente-badge{
     flex-shrink:0; font-size:12px; font-weight:800; padding:5px 10px; border-radius:20px;
@@ -606,8 +620,12 @@ function ocultarLogin(){
 // Autentica contra Firebase con el mismo id_token de Google (sin pedir un
 // segundo login), y recién ahí entra a la app: sin esto, Firestore rechaza
 // todas las lecturas/escrituras porque request.auth queda vacío.
-function autenticarFirebaseYEntrar(token){
-  if(!window.firebaseSignInConCredencialGoogle){ ocultarLogin(); cargarDatos(); return; }
+async function autenticarFirebaseYEntrar(token){
+  // Espera a que el módulo de Firebase (arriba) haya terminado de definir
+  // window.firebaseSignInConCredencialGoogle y window.firestoreXxx. Si no se
+  // espera esto, en conexiones lentas el login puede terminar antes de que
+  // ese módulo cargue, y entonces las funciones todavía no existen.
+  await window._firebaseListo;
   window.firebaseSignInConCredencialGoogle(token).then(() => {
     ocultarLogin();
     cargarDatos();
@@ -700,6 +718,7 @@ const fabNuevo = document.getElementById('fab-nuevo');
 async function cargarDatos(){
   btnRefresh.classList.add('spinning');
   try{
+    await window._firebaseListo;
     const [clientesDocs, choferesDocs] = await Promise.all([
       window.firestoreLeerClientes(),
       window.firestoreLeerChoferes()
