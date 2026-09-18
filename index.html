@@ -301,7 +301,7 @@
   .productos-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
   .productos-grid.col-3{ grid-template-columns:1fr 1fr 1fr; }
   .productos-grid + .productos-grid{ margin-top:10px; }
-  .producto-item label{ display:block; font-size:12.5px; font-weight:700; color:var(--texto-tenue); margin:0 0 5px; }
+  .producto-item label{ display:block; text-align:center; font-size:12.5px; font-weight:700; color:var(--texto-tenue); margin:0 0 5px; }
   .producto-item input{
     width:100%; padding:11px 10px; border-radius:11px; border:1px solid var(--azul-borde);
     background:#fff; font-size:16px; text-align:center; outline:none; color:#1a1f2b; font-weight:700;
@@ -531,18 +531,18 @@ const CONFIG = {
   PRODUCTOS: [
     { codigo: 'POLLO', label: 'POLLO', unidad: 'caj' },
     { codigo: 'UNID',  label: 'UNID',  unidad: '' },
-    { codigo: 'CTO',   label: 'CTO',   unidad: 'kg' },
-    { codigo: 'FM',    label: 'FM',    unidad: 'kg' },
-    { codigo: 'ALA',   label: 'ALA',   unidad: 'kg' },
-    { codigo: 'FP',    label: 'FP',    unidad: 'kg' },
-    { codigo: 'FB',    label: 'FB',    unidad: 'kg' },
-    { codigo: 'PE',    label: 'PE',    unidad: 'kg' },
-    { codigo: 'MEN',   label: 'MEN',   unidad: 'kg' },
-    { codigo: 'MO',    label: 'MO',    unidad: 'kg' },
-    { codigo: 'CAR',   label: 'CAR',   unidad: 'kg' },
-    { codigo: 'MED',   label: 'MED',   unidad: 'kg', pesoUnitario: 5 },
-    { codigo: 'FOR',   label: 'FOR',   unidad: 'kg', pesoUnitario: 6 },
-    { codigo: 'TIR',   label: 'TIR',   unidad: 'kg', pesoUnitario: 6 }
+    { codigo: 'CTO',   label: 'CTO',   unidad: 'kg', aclaracion: 'Cuartos Traseros' },
+    { codigo: 'FM',    label: 'FM',    unidad: 'kg', aclaracion: 'Filet de Muslo' },
+    { codigo: 'ALA',   label: 'ALA',   unidad: 'kg', aclaracion: 'Alas' },
+    { codigo: 'FP',    label: 'FP',    unidad: 'kg', aclaracion: 'Filet de Pechuga' },
+    { codigo: 'FB',    label: 'FB',    unidad: 'kg', aclaracion: 'Filet de Pechuga B' },
+    { codigo: 'PE',    label: 'PE',    unidad: 'kg', aclaracion: 'Pechuguín' },
+    { codigo: 'MEN',   label: 'MEN',   unidad: 'kg', aclaracion: 'Menudos' },
+    { codigo: 'MO',    label: 'MO',    unidad: 'kg', aclaracion: 'Molida' },
+    { codigo: 'CAR',   label: 'CAR',   unidad: 'kg', aclaracion: 'Carcazas' },
+    { codigo: 'MED',   label: 'MED',   unidad: 'kg', pesoUnitario: 5, aclaracion: 'Medallones' },
+    { codigo: 'FOR',   label: 'FOR',   unidad: 'kg', pesoUnitario: 6, aclaracion: 'Formitas' },
+    { codigo: 'TIR',   label: 'TIR',   unidad: 'kg', pesoUnitario: 6, aclaracion: 'Tiritas' }
   ]
 };
 /* ============================================= */
@@ -1029,8 +1029,9 @@ function abrirCantidades(nombreCliente){
   const itemHtml = p => {
     const val = c[p.codigo];
     const valStr = (val === undefined || val === null || val === '') ? '' : String(val);
+    const labelTexto = p.aclaracion ? `${p.label} (${p.aclaracion})` : p.label;
     return `<div class="producto-item">
-      <label>${escapeHtml(p.label)}</label>
+      <label>${escapeHtml(labelTexto)}</label>
       <input type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-codigo="${p.codigo}" value="${escapeHtml(valStr)}">
     </div>`;
   };
