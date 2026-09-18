@@ -276,6 +276,7 @@
     padding:18px 20px 14px; border-bottom:1px solid var(--linea); flex-shrink:0;
   }
   .modal-header h3{ margin:0; font-size:18px; font-weight:800; color:#111624; }
+  .seccion-titulo{ display:block; text-align:center; font-size:16px; font-weight:800; color:#111624; margin:14px 0 8px; }
   .modal-header .modal-sub{ font-size:12.5px; color:var(--texto-tenue); font-weight:600; margin-top:2px; }
   .modal-close{ background:none; border:none; font-size:26px; line-height:1; cursor:pointer; color:var(--texto-tenue); padding:4px 8px; }
   .modal-body{ padding:16px 20px 8px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
@@ -379,9 +380,9 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="cant-cliente-id">
-      <label>Cantidades</label>
+      <label class="seccion-titulo">Cantidades</label>
       <div id="cant-grid"></div>
-      <label>Estado</label>
+      <label class="seccion-titulo">Estado</label>
       <div class="estado-grid" id="cant-estado-grid"></div>
       <input type="hidden" id="cant-estado-valor">
     </div>
@@ -529,8 +530,8 @@ const CONFIG = {
   // directo): cuántos kilos pesa cada bolsa, para mostrar el total en kilos.
   // Si el producto ya se carga directamente en kg, no lleva "pesoUnitario".
   PRODUCTOS: [
-    { codigo: 'POLLO', label: 'POLLO', unidad: 'caj' },
-    { codigo: 'UNID',  label: 'UNID',  unidad: '' },
+    { codigo: 'POLLO', label: 'POLLO', unidad: 'caj', aclaracion: 'Cajón de Pollo Entero' },
+    { codigo: 'UNID',  label: 'UNID',  unidad: '', aclaracion: 'Unidades de Pollo Entero' },
     { codigo: 'CTO',   label: 'CTO',   unidad: 'kg', aclaracion: 'Cuartos Traseros' },
     { codigo: 'FM',    label: 'FM',    unidad: 'kg', aclaracion: 'Filet de Muslo' },
     { codigo: 'ALA',   label: 'ALA',   unidad: 'kg', aclaracion: 'Alas' },
