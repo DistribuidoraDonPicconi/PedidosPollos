@@ -28,7 +28,7 @@
 <!-- Firebase: Auth (para vincular el login de Google) + Firestore (base de datos) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithCredential, signOut } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
   import {
     getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
@@ -49,6 +49,8 @@
   // Expuestos en window porque el resto del código (fuera de este módulo)
   // todavía es JS clásico, no un módulo — así lo puede usar sin import.
   window.firebaseSignOut = () => signOut(firebaseAuth);
+  // Única fuente de verdad de la sesión: Firebase Auth (persiste sola y renueva el token).
+  window.firebaseOnAuth = (cb) => onAuthStateChanged(firebaseAuth, cb);
 
   // Toma el id_token que ya devuelve el login de Google (Google Identity
   // Services) y lo usa para autenticar TAMBIÉN contra Firebase, sin pedir
@@ -549,7 +551,9 @@ const CONFIG = {
 /* ============================================= */
 
 /* ============== LOGIN CON GOOGLE ============== */
-const LOGIN_STORAGE_KEY = 'pedidos_pollo_login';
+// La sesión la maneja Firebase Auth: persiste sola entre visitas y renueva el
+// token en segundo plano. Antes se guardaba a mano el id_token de Google, que
+// dura 1 hora, y por eso pedía loguearse de nuevo todo el tiempo.
 
 const loginScreen = document.getElementById('login-screen');
 const loginChecking = document.getElementById('login-checking');
@@ -558,58 +562,31 @@ const loginError = document.getElementById('login-error');
 const loginHint = document.getElementById('login-hint');
 const btnLogout = document.getElementById('btn-logout');
 
-function decodeJwt_(token){
-  try{
-    const base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-    const json = decodeURIComponent(atob(base64).split('').map(c =>
-      '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-    ).join(''));
-    return JSON.parse(json);
-  }catch(err){ return null; }
-}
-
-function sesionGuardada(){
-  try{
-    const raw = localStorage.getItem(LOGIN_STORAGE_KEY);
-    if(!raw) return null;
-    const datos = JSON.parse(raw);
-    if(!datos.token || !datos.exp) return null;
-    if(Date.now() / 1000 > datos.exp - 60) return null;
-    return datos;
-  }catch(err){ return null; }
-}
-
-function guardarSesion(token, payload){
-  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ token, email: payload.email, exp: payload.exp }));
-}
+let datosCargadosPara = null; // evita recargar datos si Firebase repite el mismo usuario
+let googleListo = false;
 
 function cerrarSesion(desactivarAutoSelect){
-  localStorage.removeItem(LOGIN_STORAGE_KEY);
   // Solo cortamos el auto-login de Chrome cuando el usuario decide
   // explícitamente cerrar sesión (por ejemplo, para pasarle el
   // dispositivo a otro chofer). Si lo hacemos también en los cierres
-  // automáticos (token vencido, cuenta dada de baja), Chrome nunca llega
+  // automáticos (cuenta dada de baja, sin permisos), Chrome nunca llega
   // a "confiar" en el login silencioso y siempre vuelve a pedir elegir
   // cuenta completo en vez de la burbuja de un solo toque.
   if(desactivarAutoSelect && window.google && google.accounts && google.accounts.id){
     google.accounts.id.disableAutoSelect();
   }
+  datosCargadosPara = null;
   if(window.firebaseSignOut){ window.firebaseSignOut().catch(() => {}); }
   mostrarLogin();
 }
 
-function tokenActual(){
-  const sesion = sesionGuardada();
-  return sesion ? sesion.token : null;
-}
-
-function mostrarLogin(){
+function mostrarLogin(preservarError){
   document.getElementById('app').style.display = 'none';
   loginScreen.classList.remove('hidden');
   loginChecking.style.display = 'none';
   googleBtnContainer.style.display = 'block';
   loginHint.style.display = 'block';
-  loginError.textContent = '';
+  if(!preservarError) loginError.textContent = '';
 }
 
 function ocultarLogin(){
@@ -618,63 +595,36 @@ function ocultarLogin(){
   document.getElementById('app').style.display = '';
 }
 
-// Autentica contra Firebase con el mismo id_token de Google (sin pedir un
-// segundo login), y recién ahí entra a la app: sin esto, Firestore rechaza
-// todas las lecturas/escrituras porque request.auth queda vacío.
-async function autenticarFirebaseYEntrar(token){
-  // Espera a que el módulo de Firebase (arriba) haya terminado de definir
-  // window.firebaseSignInConCredencialGoogle y window.firestoreXxx. Si no se
-  // espera esto, en conexiones lentas el login puede terminar antes de que
-  // ese módulo cargue, y entonces las funciones todavía no existen.
-  await window._firebaseListo;
-  window.firebaseSignInConCredencialGoogle(token).then(() => {
-    ocultarLogin();
-    cargarDatos();
-  }).catch((err) => {
-    cerrarSesion();
+// El botón de Google entrega un id_token; se lo pasamos a Firebase y listo.
+// El resto (validar el mail, entrar a la app, cargar datos) lo hace
+// onAuthStateChanged en iniciarLogin().
+async function manejarCredencial(response){
+  loginError.textContent = '';
+  loginChecking.textContent = 'Iniciando sesión...';
+  loginChecking.style.display = 'block';
+  googleBtnContainer.style.display = 'none';
+  loginHint.style.display = 'none';
+  try{
+    await window._firebaseListo;
+    await window.firebaseSignInConCredencialGoogle(response.credential);
+  }catch(err){
+    mostrarLogin();
     loginError.textContent = 'No se pudo autenticar con Firebase. ' + (err && err.message ? err.message : '');
-  });
+  }
 }
 
-function manejarCredencial(response){
-  const payload = decodeJwt_(response.credential);
-  if(!payload){ loginError.textContent = 'No se pudo leer la respuesta de Google.'; return; }
-  const email = String(payload.email || '').trim().toLowerCase();
-  const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
-  if(autorizados.indexOf(email) === -1){
-    loginError.textContent = 'Tu cuenta (' + email + ') no tiene acceso a esta app.';
-    return;
-  }
-  guardarSesion(response.credential, payload);
-  autenticarFirebaseYEntrar(response.credential);
-}
-
-function iniciarLogin(){
-  // El chequeo de la sesión guardada no depende de Google: se hace ya,
-  // sin esperar a que cargue accounts.google.com/gsi/client por red. Antes
-  // esperaba a ese script incluso con sesión válida, y eso hacía que la
-  // pantalla de login (visible por defecto mientras tanto) quedara un
-  // rato de más antes de entrar a la tabla.
-  const sesion = sesionGuardada();
-  if(sesion){
-    const emailSesion = String(sesion.email || '').trim().toLowerCase();
-    const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
-    if(autorizados.indexOf(emailSesion) === -1){
-      cerrarSesion();
-      loginError.textContent = 'Tu cuenta (' + emailSesion + ') no tiene acceso a esta app.';
-      return;
-    }
-    autenticarFirebaseYEntrar(sesion.token);
-    return;
-  }
-
+// Prepara el botón de Google y el One Tap (una sola vez). Solo se llama
+// cuando no hay sesión de Firebase.
+function prepararGoogle(){
+  if(googleListo) return;
   if(!window.google || !google.accounts || !google.accounts.id){
-    setTimeout(iniciarLogin, 300);
+    setTimeout(prepararGoogle, 300);
     return;
   }
+  googleListo = true;
   // auto_select: si el navegador tiene una sola cuenta de Google ya usada
-  // antes en esta app, google.accounts.id.prompt() de más abajo entra
-  // directo, sin mostrar ningún selector ni pedir un click.
+  // antes en esta app, google.accounts.id.prompt() entra directo, sin
+  // mostrar ningún selector ni pedir un click.
   google.accounts.id.initialize({
     client_id: CONFIG.GOOGLE_CLIENT_ID,
     callback: manejarCredencial,
@@ -682,14 +632,36 @@ function iniciarLogin(){
     itp_support: true
   });
   google.accounts.id.renderButton(googleBtnContainer, { type:'standard', size:'large', theme:'filled_blue', text:'signin_with', shape:'pill' });
-
-  mostrarLogin();
   // One Tap: intenta el login automático (silencioso) con la última
-  // cuenta usada. Si el navegador no tiene una cuenta para ofrecer, o
-  // el usuario ya lo cerró antes, simplemente no aparece nada y queda
-  // el botón de abajo como alternativa manual (esa sí deja elegir
-  // "usar otra cuenta").
+  // cuenta usada. Si no hay cuenta para ofrecer, simplemente no aparece
+  // nada y queda el botón como alternativa manual.
   google.accounts.id.prompt();
+}
+
+async function iniciarLogin(){
+  // El módulo de Firebase carga async: esperamos a que esté listo.
+  await window._firebaseListo;
+  window.firebaseOnAuth((user) => {
+    if(!user){
+      // Sin sesión: se muestra el botón de Google (conservando el mensaje de
+      // error si venimos de un rechazo).
+      mostrarLogin(true);
+      prepararGoogle();
+      return;
+    }
+    const email = String(user.email || '').trim().toLowerCase();
+    const autorizados = CONFIG.EMAILS_AUTORIZADOS.map(e => e.toLowerCase());
+    if(autorizados.indexOf(email) === -1){
+      cerrarSesion();
+      loginError.textContent = 'Tu cuenta (' + email + ') no tiene acceso a esta app.';
+      return;
+    }
+    ocultarLogin();
+    if(datosCargadosPara !== email){
+      datosCargadosPara = email;
+      cargarDatos();
+    }
+  });
 }
 
 btnLogout.addEventListener('click', () => {
