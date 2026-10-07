@@ -564,6 +564,7 @@ const btnLogout = document.getElementById('btn-logout');
 
 let datosCargadosPara = null; // evita recargar datos si Firebase repite el mismo usuario
 let googleListo = false;
+let sesionResuelta = false; // pasa a true cuando Firebase responde por primera vez
 
 function cerrarSesion(desactivarAutoSelect){
   // Solo cortamos el auto-login de Chrome cuando el usuario decide
@@ -605,7 +606,10 @@ async function manejarCredencial(response){
   googleBtnContainer.style.display = 'none';
   loginHint.style.display = 'none';
   try{
-    await window._firebaseListo;
+    await Promise.race([
+      window._firebaseListo,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Firebase no respondió. Revisá tu conexión.')), 8000))
+    ]);
     await window.firebaseSignInConCredencialGoogle(response.credential);
   }catch(err){
     mostrarLogin();
@@ -638,10 +642,21 @@ function prepararGoogle(){
   google.accounts.id.prompt();
 }
 
+// Si Firebase no responde (sin internet, bloqueado, etc.), no dejamos la
+// pantalla en "Verificando sesión..." para siempre: mostramos el botón.
+setTimeout(() => {
+  if(!sesionResuelta){
+    mostrarLogin();
+    loginError.textContent = 'No se pudo verificar la sesión. Iniciá sesión de nuevo.';
+    prepararGoogle();
+  }
+}, 8000);
+
 async function iniciarLogin(){
   // El módulo de Firebase carga async: esperamos a que esté listo.
   await window._firebaseListo;
   window.firebaseOnAuth((user) => {
+    sesionResuelta = true;
     if(!user){
       // Sin sesión: se muestra el botón de Google (conservando el mensaje de
       // error si venimos de un rechazo).
