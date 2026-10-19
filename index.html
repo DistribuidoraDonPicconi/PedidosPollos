@@ -937,8 +937,8 @@ function renderPedido(lista){
           Enviar
         </button>
       </div>
-      ${conCantidad.length ? `<div class="grupo-totales"><span class="tl">Total</span><div class="tchips">${totalesChipsHtml(conCantidad)}</div></div>` : ''}
-      <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
+      <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">
+      ${conCantidad.length ? `<div class="grupo-totales"><span class="tl">Total</span><div class="tchips">${totalesChipsHtml(conCantidad)}</div></div>` : ''}`;
     let localidadAnterior = null;
     clientesVisibles.forEach(c => {
       const localidadActual = c.Localidad || 'Sin localidad';
