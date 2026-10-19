@@ -304,6 +304,15 @@
   .btn-guardar:active{ opacity:0.9; }
   .btn-eliminar-cliente{ background:#fdf2f1; color:var(--rojo); }
   .btn-eliminar-cliente:active{ background:#f9dedb; }
+  /* Eliminar cliente: al final del formulario, lejos de Guardar/Cancelar */
+  #nc-eliminar-wrap{ margin-top:26px; padding-top:16px; border-top:1px solid var(--linea); margin-bottom:12px; }
+  #nc-eliminar-wrap.hidden{ display:none; }
+  #nc-eliminar{
+    display:block; width:100%; padding:11px; border-radius:12px;
+    border:1.5px solid #f0c9c5; background:#fff; color:var(--rojo);
+    font-size:14.5px; font-weight:700; cursor:pointer;
+  }
+  #nc-eliminar:active{ background:#fdf2f1; }
 
   /* Grid de cantidades por producto */
   .productos-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
@@ -449,6 +458,9 @@
       <input type="text" id="nc-localidad" maxlength="30" placeholder="Ej: El Pingo" autocomplete="off">
       <label>Contacto (WhatsApp)</label>
       <input type="tel" id="nc-contacto" maxlength="20" placeholder="Ej: 5493435000518" autocomplete="off">
+      <div id="nc-eliminar-wrap" class="hidden">
+        <button type="button" id="nc-eliminar">Eliminar cliente</button>
+      </div>
     </div>
     <div class="modal-error" id="nc-error"></div>
     <div class="modal-footer" id="nc-footer">
@@ -1153,6 +1165,7 @@ function abrirNuevoCliente(){
   renderRepartoBotones(ncRepartoGrid, ncReparto);
   ncError.textContent = '';
   ncNombre.disabled = false;
+  document.getElementById('nc-eliminar-wrap').classList.add('hidden');
   ncFooter.innerHTML = `<button class="btn-cancelar" id="nc-cancelar-btn">Cancelar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
   reengancharFooterCliente();
   clienteModal.classList.remove('hidden');
@@ -1169,7 +1182,8 @@ function abrirEditarCliente(nombreCliente){
   ncLocalidad.value = c.Localidad || '';
   ncContacto.value = c.Contacto || '';
   ncError.textContent = '';
-  ncFooter.innerHTML = `<button class="btn-eliminar-cliente" id="nc-eliminar">Eliminar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
+  document.getElementById('nc-eliminar-wrap').classList.remove('hidden');
+  ncFooter.innerHTML = `<button class="btn-cancelar" id="nc-cancelar-btn">Cancelar</button><button class="btn-guardar" id="nc-guardar">Guardar</button>`;
   reengancharFooterCliente();
   clienteModal.classList.remove('hidden');
 }
@@ -1177,10 +1191,11 @@ function abrirEditarCliente(nombreCliente){
 function reengancharFooterCliente(){
   const cancelar = document.getElementById('nc-cancelar-btn');
   if(cancelar) cancelar.addEventListener('click', () => clienteModal.classList.add('hidden'));
-  const eliminar = document.getElementById('nc-eliminar');
-  if(eliminar) eliminar.addEventListener('click', () => pedirConfirmacionEliminarCliente(ncNombreOriginal.value));
   document.getElementById('nc-guardar').addEventListener('click', guardarCliente);
 }
+
+// El botón Eliminar vive en el formulario (no se recrea), así que se engancha una sola vez
+document.getElementById('nc-eliminar').addEventListener('click', () => pedirConfirmacionEliminarCliente(ncNombreOriginal.value));
 
 document.getElementById('nc-cerrar').addEventListener('click', () => clienteModal.classList.add('hidden'));
 
