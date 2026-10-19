@@ -201,10 +201,18 @@
   .grupo-titulo .cant{ color:#b7c0d4; font-weight:700; margin-left:4px; }
   .grupo-clientes.colapsado{ display:none; }
   .grupo-totales{
-    font-size:12.5px; font-weight:700; color:var(--azul-osc);
+    display:flex; align-items:flex-start; gap:8px;
     background:#fff; border:1px solid var(--azul-borde); border-radius:10px;
-    padding:7px 10px; margin:0 4px 10px; line-height:1.5;
+    padding:8px 10px; margin:0 4px 10px;
   }
+  .grupo-totales .tl{
+    font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px;
+    color:var(--texto-tenue); padding-top:5px; flex-shrink:0;
+  }
+  .tchips{ display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
+  .tchip{ border-radius:8px; padding:3px 8px; font-size:13px; white-space:nowrap; line-height:1.4; }
+  .tchip .tcod{ font-size:11px; font-weight:800; letter-spacing:0.3px; opacity:0.8; }
+  .tchip b{ font-weight:800; }
   .localidad-sub-titulo{
     font-size:11px; font-weight:800; color:var(--azul); text-transform:uppercase; letter-spacing:0.5px;
     padding:14px 4px 6px; margin-bottom:2px; border-bottom:1px solid var(--azul-borde);
@@ -372,7 +380,7 @@
     font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px;
     color:var(--texto-tenue); margin-bottom:4px;
   }
-  .total-general .tg-items{ font-size:14px; font-weight:800; color:var(--azul-osc); line-height:1.5; }
+  .total-general .tchip{ font-size:14px; padding:4px 9px; }
 
   /* Login */
   #login-screen{
@@ -796,14 +804,43 @@ function formatearItemProducto(p, cantidad){
 // Suma las cantidades de cada producto entre varios clientes y devuelve los textos
 // ya formateados con su unidad: ["POLLO 5 caj", "CTO 45 kg", "MED 3 (15 kg)", ...].
 // Solo incluye los productos que tienen algo pedido.
-function totalesPorProducto(clientes){
+function totalesDetalle(clientes){
   return CONFIG.PRODUCTOS
     .map(p => {
       const total = clientes.reduce((acc, c) => acc + (Number(c[p.codigo]) || 0), 0);
       return { p, total: Math.round(total * 100) / 100 };
     })
-    .filter(x => x.total > 0)
-    .map(x => formatearItemProducto(x.p, x.total));
+    .filter(x => x.total > 0);
+}
+function totalesPorProducto(clientes){
+  return totalesDetalle(clientes).map(x => formatearItemProducto(x.p, x.total));
+}
+
+// Color de cada producto para distinguirlos de un vistazo en los totales (fondo suave + texto oscuro).
+// POLLO y UNID comparten familia (amarillo) porque son los dos de pollo entero.
+const COLORES_PRODUCTO = {
+  POLLO:{bg:'#ffe9a8', fg:'#7a5c00'},
+  UNID: {bg:'#fff6cf', fg:'#8a6d00'},
+  CTO:  {bg:'#fde2e0', fg:'#a8322a'},
+  FM:   {bg:'#fde0ee', fg:'#a3245f'},
+  ALA:  {bg:'#f3e1fb', fg:'#7a2a9e'},
+  FP:   {bg:'#e3e6fd', fg:'#3a3fa8'},
+  FB:   {bg:'#dbe9ff', fg:'#1f55b5'},
+  PE:   {bg:'#d9f1fb', fg:'#146f93'},
+  MEN:  {bg:'#d8f3ec', fg:'#12755f'},
+  MO:   {bg:'#dff3dc', fg:'#2a7a24'},
+  CAR:  {bg:'#eef0d0', fg:'#6b7010'},
+  MED:  {bg:'#f2e6d9', fg:'#7a4a1c'},
+  FOR:  {bg:'#e8e8ec', fg:'#4a4f60'},
+  TIR:  {bg:'#ffe0cc', fg:'#a64b0f'}
+};
+// HTML de los totales: una "pastilla" de color por producto (código chico + cantidad con su unidad).
+function totalesChipsHtml(clientes){
+  return totalesDetalle(clientes).map(x => {
+    const col = COLORES_PRODUCTO[x.p.codigo] || { bg:'#eef1f7', fg:'#3a4560' };
+    const valor = formatearItemProducto(x.p, x.total).slice(x.p.label.length).trim();
+    return `<span class="tchip" style="background:${col.bg};color:${col.fg}"><span class="tcod">${escapeHtml(x.p.label)}</span> <b>${escapeHtml(valor)}</b></span>`;
+  }).join('');
 }
 
 function tieneCantidades(cliente){
@@ -871,7 +908,7 @@ function renderPedido(lista){
   let html = conCantidadTodos.length
     ? `<div class="total-general">
         <div class="tg-titulo">Total general · ${conCantidadTodos.length} cliente${conCantidadTodos.length === 1 ? '' : 's'}</div>
-        <div class="tg-items">${totalesPorProducto(conCantidadTodos).map(escapeHtml).join(' · ')}</div>
+        <div class="tchips">${totalesChipsHtml(conCantidadTodos)}</div>
       </div>`
     : '';
   let huboGrupos = false;
@@ -900,7 +937,7 @@ function renderPedido(lista){
           Enviar
         </button>
       </div>
-      ${conCantidad.length ? `<div class="grupo-totales">${totalesPorProducto(conCantidad).map(escapeHtml).join(' · ')}</div>` : ''}
+      ${conCantidad.length ? `<div class="grupo-totales"><span class="tl">Total</span><div class="tchips">${totalesChipsHtml(conCantidad)}</div></div>` : ''}
       <div class="grupo-clientes ${colapsado ? 'colapsado' : ''}">`;
     let localidadAnterior = null;
     clientesVisibles.forEach(c => {
