@@ -1,6 +1,6 @@
 {
-  "name": "Pedidos de Pollo",
-  "short_name": "Pedidos",
+  "name": "Pedidos de Pollo DP",
+  "short_name": "Pedidos DP",
   "description": "Carga de pedidos por cliente y envío al chofer por reparto",
   "start_url": "./index.html",
   "display": "standalone",
