@@ -1,7 +1,7 @@
 // Service Worker mínimo: solo lo necesario para que la app sea
 // instalable como PWA. No cachea datos en vivo (Firestore/Google), así
 // el pedido nunca queda desactualizado.
-const CACHE_NAME = 'pedidos-pollo-v2';
+const CACHE_NAME = 'pedidos-pollo-v3';
 const ARCHIVOS_CACHE = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {

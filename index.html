@@ -334,6 +334,59 @@
   .producto-item input:focus{ border-color:var(--azul); }
   .producto-item input:not(:placeholder-shown){ background:var(--azul-suave); border-color:var(--azul-borde); }
 
+  /* ---- Carga rápida de productos (botones + cantidad) ---- */
+  .pk-right{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .pk-clear{
+    border:1.5px solid var(--rojo); background:#fff; color:var(--rojo); height:32px; padding:0 12px;
+    border-radius:999px; font-size:12.5px; font-weight:800; cursor:pointer; white-space:nowrap;
+  }
+  .pk-clear:active{ background:var(--rojo-suave-fondo); transform:scale(0.95); }
+  .pk-clear:disabled{ opacity:.35; cursor:not-allowed; }
+  .pk-row{ display:flex; gap:8px; margin-bottom:8px; }
+  .qb{
+    flex:1; min-width:0; background:#fff; border:1.5px solid var(--azul-borde); border-radius:12px;
+    padding:9px 4px 7px; text-align:center; cursor:pointer;
+    transition:border-color .12s ease, transform .08s ease, background .12s ease;
+  }
+  .qb:active{ transform:scale(0.96); }
+  .qb.selected{ border-color:var(--azul); background:var(--azul-suave); }
+  .qb .qb-name{ display:block; font-weight:800; font-size:14.5px; color:#1a1f2b; }
+  .qb .qb-qty{
+    display:block; margin-top:2px; min-height:15px; line-height:15px; font-size:12px; font-weight:800; color:var(--azul);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .qb.flash{ background:var(--azul); border-color:var(--azul); }
+  .qb.flash .qb-name, .qb.flash .qb-qty{ color:#fff; }
+  .pk-controls{ padding:10px 20px 4px; flex-shrink:0; border-top:1px solid var(--linea); background:#fff; }
+  .pk-qty{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+  .pk-l{
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:800; color:var(--texto-tenue);
+  }
+  .pk-stepper{ display:flex; align-items:center; background:var(--azul-suave); border-radius:999px; padding:3px; flex-shrink:0; }
+  .pk-stepper button{
+    width:40px; height:40px; border-radius:999px; border:none; background:#fff; font-size:21px; font-weight:700;
+    color:var(--azul); cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,0.06);
+  }
+  .pk-stepper button.on{ color:#fff; background:var(--azul); }
+  .pk-stepper #pk-menos.on{ background:var(--rojo); }
+  .pk-stepper input{
+    width:70px; min-width:0; text-align:center; border:none; background:transparent; outline:none;
+    font-size:17px; font-weight:800; color:#1a1f2b; padding:0;
+  }
+  .pk-stepper input::placeholder{ color:var(--texto-tenue); opacity:.6; }
+  .pk-stepper input:disabled{ opacity:.5; }
+  .pk-chips{ display:flex; gap:6px; margin-bottom:8px; }
+  .pk-chips button{
+    flex:1; min-width:0; border:1.5px solid var(--azul); background:var(--azul-suave); color:var(--azul-osc);
+    border-radius:10px; height:38px; font-size:14px; font-weight:800; cursor:pointer; transition:transform .08s ease; padding:0;
+  }
+  .pk-chips button:active{ transform:scale(0.95); }
+  .pk-chips button:disabled{ opacity:.4; cursor:not-allowed; }
+  .pk-chips.neg button{ border-color:var(--rojo); background:var(--rojo-suave-fondo); color:var(--rojo); }
+  .pk-chips .pk-undo{ flex:0 0 44px; border-color:var(--azul-borde); background:#fff; color:var(--texto-tenue); font-size:17px; }
+  .pk-chips.neg .pk-undo{ border-color:var(--azul-borde); background:#fff; color:var(--texto-tenue); }
+
   .estado-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .estado-btn{
     border:1px solid var(--azul-borde); background:#fff; cursor:pointer;
@@ -430,7 +483,10 @@
         <h3 id="cant-titulo">Cliente</h3>
         <div class="modal-sub" id="cant-sub"></div>
       </div>
-      <button class="modal-close" id="cant-cerrar" aria-label="Cerrar">×</button>
+      <div class="pk-right">
+        <button type="button" class="pk-clear" id="pk-clear" aria-label="Borrar todas las cantidades" disabled>🗑 Borrar todo</button>
+        <button class="modal-close" id="cant-cerrar" aria-label="Cerrar">×</button>
+      </div>
     </div>
     <div class="modal-body">
       <input type="hidden" id="cant-cliente-id">
@@ -439,6 +495,25 @@
       <label class="seccion-titulo">Estado</label>
       <div class="estado-grid" id="cant-estado-grid"></div>
       <input type="hidden" id="cant-estado-valor">
+    </div>
+    <!-- Controles de cantidad: siempre visibles, abajo de la lista de productos -->
+    <div class="pk-controls">
+      <div class="pk-qty">
+        <span class="pk-l" id="pk-l">Elegí un producto</span>
+        <div class="pk-stepper">
+          <button type="button" id="pk-menos" aria-label="Restar">−</button>
+          <input type="text" id="pk-cantidad" value="" placeholder="0" inputmode="numeric" disabled autocomplete="off">
+          <button type="button" id="pk-mas" class="on" aria-label="Sumar">+</button>
+        </div>
+      </div>
+      <div class="pk-chips" id="pk-chips">
+        <button type="button" data-q="1" disabled>+1</button>
+        <button type="button" data-q="5" disabled>+5</button>
+        <button type="button" data-q="10" disabled>+10</button>
+        <button type="button" data-q="15" disabled>+15</button>
+        <button type="button" data-q="20" disabled>+20</button>
+        <button type="button" class="pk-undo" id="pk-undo" aria-label="Deshacer" disabled>↩</button>
+      </div>
     </div>
     <div class="modal-error" id="cant-error"></div>
     <div class="modal-footer">
@@ -1110,6 +1185,116 @@ function renderRepartoBotones(gridEl, hiddenInput){
   });
 }
 
+/* ---- Carga rápida: se elige UN producto y los botones de cantidad suman o restan sobre él ---- */
+const PK_FILAS = [['POLLO','UNID'], ['CTO','FM','ALA'], ['FP','FB','PE'], ['MEN','MO','CAR'], ['MED','FOR','TIR']];
+let pkCant = {};     // {codigo: cantidad} del cliente que se está editando
+let pkSel = null;    // código del producto elegido
+let pkModo = 1;      // 1 = los botones suman, -1 = restan
+let pkHist = [];     // cambios para Deshacer
+const pkInp = document.getElementById('pk-cantidad');
+const pkProd = cod => CONFIG.PRODUCTOS.find(p => p.codigo === cod);
+const pkGet = cod => pkCant[cod] || 0;
+
+function pkFilas(){
+  const usados = new Set(PK_FILAS.flat());
+  const filas = PK_FILAS.map(f => f.filter(cod => pkProd(cod))).filter(f => f.length);
+  const extras = CONFIG.PRODUCTOS.map(p => p.codigo).filter(cod => !usados.has(cod));
+  for(let i = 0; i < extras.length; i += 3) filas.push(extras.slice(i, i + 3));
+  return filas;
+}
+function pkTextoCant(p, n){
+  if(!n) return ' ';   // la línea siempre ocupa su lugar: la grilla no cambia de tamaño
+  if(p.unidad === 'kg' && p.pesoUnitario) return `${n} (${n * p.pesoUnitario} kg)`;
+  return p.unidad ? `${n} ${p.unidad}` : String(n);
+}
+function pkSet(cod, n){
+  n = Math.max(0, Math.min(Math.round(Number(n) || 0), 9999));
+  if(n > 0) pkCant[cod] = n; else delete pkCant[cod];
+}
+function pkSyncCantidad(force){
+  const hay = !!pkSel;
+  pkInp.disabled = !hay;
+  document.querySelectorAll('#pk-chips button:not(.pk-undo)').forEach(b => { b.disabled = !hay; });
+  if(force || document.activeElement !== pkInp){
+    const q = hay ? pkGet(pkSel) : 0;
+    pkInp.value = q ? String(q) : '';
+  }
+  const p = hay ? pkProd(pkSel) : null;
+  document.getElementById('pk-l').textContent = p
+    ? p.label + (p.aclaracion ? ' · ' + p.aclaracion : '')
+    : 'Elegí un producto';
+}
+function pkSetModo(m){
+  pkModo = m;
+  document.getElementById('pk-mas').classList.toggle('on', m === 1);
+  document.getElementById('pk-menos').classList.toggle('on', m === -1);
+  document.getElementById('pk-chips').classList.toggle('neg', m === -1);
+  document.querySelectorAll('#pk-chips button[data-q]').forEach(b => { b.textContent = (m === 1 ? '+' : '−') + b.dataset.q; });
+}
+function pkRender(){
+  cantGrid.innerHTML = pkFilas().map(fila =>
+    '<div class="pk-row">' + fila.map(cod => {
+      const p = pkProd(cod);
+      return `<div class="qb${pkSel === cod ? ' selected' : ''}" data-codigo="${escapeHtml(cod)}">` +
+        `<span class="qb-name">${escapeHtml(p.label)}</span><span class="qb-qty">${pkTextoCant(p, pkGet(cod))}</span></div>`;
+    }).join('') + '</div>'
+  ).join('');
+  document.getElementById('pk-undo').disabled = !pkHist.length;
+  document.getElementById('pk-clear').disabled = !Object.keys(pkCant).length;
+  pkSyncCantidad(false);
+}
+
+cantGrid.addEventListener('click', e => {
+  const b = e.target.closest('.qb');
+  if(!b || !pkProd(b.dataset.codigo)) return;
+  if(pkSel !== b.dataset.codigo){ pkSel = b.dataset.codigo; pkSetModo(1); }
+  pkRender();
+  pkSyncCantidad(true);
+});
+document.getElementById('pk-menos').addEventListener('click', () => pkSetModo(-1));
+document.getElementById('pk-mas').addEventListener('click', () => pkSetModo(1));
+document.getElementById('pk-chips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-q]');
+  if(!b || !pkSel) return;
+  const cur = pkGet(pkSel);
+  const nuevo = Math.max(0, cur + pkModo * Number(b.dataset.q));
+  if(nuevo === cur) return;
+  const cod = pkSel;
+  pkHist.push({codigo: cod, prev: cur});
+  pkSet(cod, nuevo);
+  pkRender();
+  pkSyncCantidad(true);
+  const bt = cantGrid.querySelector('.qb[data-codigo="' + cod + '"]');
+  if(bt){ bt.classList.add('flash'); setTimeout(() => bt.classList.remove('flash'), 220); }
+  try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){}
+});
+// Escribir a mano la cantidad exacta del producto elegido
+pkInp.addEventListener('focus', () => { try{ pkInp.select(); }catch(_){} });
+pkInp.addEventListener('input', () => {
+  pkInp.value = pkInp.value.replace(/[^0-9]/g, '').slice(0, 4);
+  if(!pkSel) return;
+  pkHist = [];
+  pkSet(pkSel, pkInp.value);
+  pkRender();
+});
+pkInp.addEventListener('change', () => pkSyncCantidad(true));
+document.getElementById('pk-undo').addEventListener('click', () => {
+  const h = pkHist.pop();
+  if(!h) return;
+  if(h.restore) pkCant = h.restore; else pkSet(h.codigo, h.prev);
+  pkRender();
+  pkSyncCantidad(true);
+});
+// Borrar todas las cantidades de una (se puede revertir con Deshacer)
+document.getElementById('pk-clear').addEventListener('click', () => {
+  if(!Object.keys(pkCant).length) return;
+  pkHist.push({restore: Object.assign({}, pkCant)});
+  pkCant = {};
+  pkRender();
+  pkSyncCantidad(true);
+  try{ if(navigator.vibrate) navigator.vibrate(20); }catch(_){}
+});
+
 function abrirCantidades(nombreCliente){
   const c = pedidos.find(p => p.Cliente === nombreCliente);
   if(!c) return;
@@ -1118,20 +1303,13 @@ function abrirCantidades(nombreCliente){
   cantSub.textContent = [c.Reparto, c.Localidad].filter(Boolean).join(' · ');
   cantError.textContent = '';
 
-  const primeraFila = CONFIG.PRODUCTOS.slice(0, 2);
-  const resto = CONFIG.PRODUCTOS.slice(2);
-  const itemHtml = p => {
-    const val = c[p.codigo];
-    const valStr = (val === undefined || val === null || val === '') ? '' : String(val);
-    const labelTexto = p.aclaracion ? `${p.label} (${p.aclaracion})` : p.label;
-    return `<div class="producto-item">
-      <label>${escapeHtml(labelTexto)}</label>
-      <input type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-codigo="${p.codigo}" value="${escapeHtml(valStr)}">
-    </div>`;
-  };
-  cantGrid.innerHTML =
-    `<div class="productos-grid">${primeraFila.map(itemHtml).join('')}</div>` +
-    `<div class="productos-grid col-3">${resto.map(itemHtml).join('')}</div>`;
+  // Copia de trabajo de las cantidades: se guarda recién al tocar "Guardar"
+  pkCant = {};
+  CONFIG.PRODUCTOS.forEach(p => { const n = Number(c[p.codigo]); if(n > 0) pkCant[p.codigo] = n; });
+  pkSel = null; pkModo = 1; pkHist = [];
+  pkSetModo(1);
+  pkRender();
+  cantModal.querySelector('.modal-body').scrollTop = 0;
 
   const estadoActual = c.Estado || '';
   cantEstadoValor.value = estadoActual;
@@ -1158,9 +1336,9 @@ document.getElementById('cant-guardar').addEventListener('click', async () => {
   const c = pedidos.find(p => p.Cliente === cliente);
   if(!c){ cantError.textContent = 'No se encontró el cliente'; return; }
   const cantidades = {};
-  cantGrid.querySelectorAll('input').forEach(inp => {
-    const v = inp.value.trim();
-    cantidades[inp.dataset.codigo] = v === '' ? '' : Number(v);
+  CONFIG.PRODUCTOS.forEach(p => {
+    const n = pkGet(p.codigo);
+    cantidades[p.codigo] = n > 0 ? n : '';
   });
   const btn = document.getElementById('cant-guardar');
   btn.disabled = true; btn.textContent = 'Guardando...';
